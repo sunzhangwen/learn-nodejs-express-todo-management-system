@@ -1,0 +1,21 @@
+{
+  "name": "todos-express",
+  "version": "1.0.0",
+  "description": "",
+  "main": "main_index.js",
+  "scripts": {
+    "start": "node main_index.js",
+    "dev": "nodemon main_index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "mysql2": "^3.22.4",
+    "sequelize": "^6.37.8"
+  }
+}
