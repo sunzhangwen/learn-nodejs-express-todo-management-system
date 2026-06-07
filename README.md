@@ -38,7 +38,6 @@
 在项目根目录执行：
 
 ```bash
-cd d:\Workspace\js\todos-express
 npm install
 ```
 
