@@ -47,7 +47,7 @@ npm install
 CREATE DATABASE IF NOT EXISTS js_test_db;
 ```
 
-如果需要修改数据库配置，请编辑：`config/datatable.js`
+修改数据库配置，请编辑：`config/datatable.js`
 
 启动服务：
 
