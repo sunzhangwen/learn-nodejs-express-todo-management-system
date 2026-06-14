@@ -1,4 +1,4 @@
-const sequelize = require('../config/datatable.js')
+const sequelize = require('../config/database.js')
 const User = require('./User')
 const Task = require('./Task')
 

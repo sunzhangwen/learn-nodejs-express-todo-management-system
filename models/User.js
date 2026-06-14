@@ -1,5 +1,5 @@
 const { DataTypes, Model } = require('sequelize')
-const sequelize = require('../config/datatable.js')
+const sequelize = require('../config/database.js')
 const crypto = require('node:crypto')
 
 class User extends Model {

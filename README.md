@@ -20,7 +20,7 @@
 
 ```
 ├── config/
-│   └── datatable.js      # Sequelize MySQL 连接配置
+│   └── database.js       # Sequelize MySQL 连接配置
 ├── models/
 │   ├── index.js         # 模型关联与同步入口
 │   ├── Task.js          # 任务模型定义
@@ -38,6 +38,7 @@
 在项目根目录执行：
 
 ```bash
+cd d:\Workspace\js\todos-express
 npm install
 ```
 
@@ -47,7 +48,7 @@ npm install
 CREATE DATABASE IF NOT EXISTS js_test_db;
 ```
 
-修改数据库配置，请编辑：`config/datatable.js`
+如果需要修改数据库配置，请编辑：`config/database.js`
 
 启动服务：
 
@@ -452,5 +453,5 @@ DELETE /task/1
 ## 6. 备注
 
 - 当前接口均未实现 JWT 鉴权；如需生产环境使用，请补充登录令牌和中间件验证。
-- 数据库配置文件：`config/datatable.js`
+- 数据库配置文件：`config/database.js`
 - 若数据库名称或账号密码不同，请根据实际环境调整配置。
