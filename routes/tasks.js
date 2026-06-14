@@ -2,8 +2,9 @@ const express = require('express')
 const { Task, User } = require('../models')
 
 const router = express.Router()
+const { authMiddleware } = require('../middleware/auth')
 
-router.post('/create', async (req, res) => {
+router.post('/create', authMiddleware, async (req, res) => {
   const { title, description, userId } = req.body
 
   if (!title) {
@@ -28,7 +29,7 @@ router.post('/create', async (req, res) => {
   }
 })
 
-router.get('/list', async (req, res) => {
+router.get('/list', authMiddleware, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.max(1, parseInt(req.query.limit, 10) || 20)
   const offset = (page - 1) * limit
@@ -61,7 +62,7 @@ router.get('/list', async (req, res) => {
   }
 })
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authMiddleware, async (req, res) => {
   const taskId = req.params.id
 
   try {
@@ -86,7 +87,7 @@ router.get('/:id', async (req, res) => {
   }
 })
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', authMiddleware, async (req, res) => {
   const taskId = req.params.id
   const { title, description, completed } = req.body
 
@@ -113,7 +114,7 @@ router.put('/:id', async (req, res) => {
   }
 })
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authMiddleware, async (req, res) => {
   const taskId = req.params.id
 
   try {

@@ -1,5 +1,8 @@
 const express = require('express')
 const { User } = require('../models')
+const jwt = require('jsonwebtoken')
+
+const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me'
 
 const router = express.Router()
 
@@ -74,10 +77,12 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ code: 401, msg: '用户名或密码错误' })
     }
 
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' })
     res.json({
       code: 200,
       msg: '登录成功',
-      data: user.toSafeObject()
+      data: user.toSafeObject(),
+      token
     })
   } catch (error) {
     console.error('登录失败', error)

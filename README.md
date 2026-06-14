@@ -1,4 +1,4 @@
-# Nodejs Express Todos Management System
+﻿# Nodejs Express Todos Management System
 
 简洁专业的 Node.js + Express + Sequelize MySQL 示例项目，支持用户管理和任务管理接口。
 
@@ -14,7 +14,7 @@
 
 - Node.js
 - MySQL
-- 通过npm安装依赖：`express`、`sequelize`、`mysql2`、`cors`
+- 通过 npm 安装依赖：`express`、`sequelize`、`mysql2`、`cors`、`jsonwebtoken`
 
 ## 3. 项目目录结构
 
@@ -28,6 +28,8 @@
 ├── routes/
 │   ├── tasks.js         # 任务管理路由
 │   └── users.js         # 用户管理路由
+├── middleware/
+│   └── auth.js          # JWT 鉴权中间件
 ├── main_index.js        # 应用主入口文件
 ├── package.json         # 项目依赖及脚本
 └── README.md            # 项目说明文档
@@ -38,7 +40,7 @@
 在项目根目录执行：
 
 ```bash
-cd d:\Workspace\js\todos-express
+cd d:\Workspace\js\learn-nodejs-express-todo-management-system
 npm install
 ```
 
@@ -84,14 +86,14 @@ http://localhost:3000
 - 方法：`POST`
 - 路径：`/users/register`
 - 描述：创建新用户账号
-- 是否鉴权：否
+- 用户信息验证：无需 token
 
 请求参数：
 
-| 参数名   | 类型   | 是否必填 | 说明     |
-|---------|--------|----------|----------|
-| username | string | 是       | 用户名   |
-| password | string | 是       | 密码     |
+| 参数名   | 类型   | 是否必填 | 说明   |
+|---------|--------|----------|--------|
+| username | string | 是       | 用户名 |
+| password | string | 是       | 密码   |
 
 请求示例：
 
@@ -133,7 +135,7 @@ http://localhost:3000
 - 方法：`POST`
 - 路径：`/users/login`
 - 描述：校验用户名与密码
-- 是否鉴权：否
+- 用户信息验证：无需 token
 
 请求参数：
 
@@ -162,7 +164,8 @@ http://localhost:3000
     "username": "alice",
     "createdAt": "2026-06-06T00:00:00.000Z",
     "updatedAt": "2026-06-06T00:00:00.000Z"
-  }
+  },
+  "token": "<JWT_TOKEN>"
 }
 ```
 
@@ -182,7 +185,7 @@ http://localhost:3000
 - 方法：`GET`
 - 路径：`/users`
 - 描述：分页获取用户列表
-- 是否鉴权：否
+- 用户信息验证：无需 token
 
 请求参数：
 
@@ -227,7 +230,8 @@ GET /users?page=1&limit=10
 - 方法：`POST`
 - 路径：`/task/create`
 - 描述：新增任务记录
-- 是否鉴权：否
+- 用户信息验证：需登录 token
+- 请求头：`Authorization: Bearer <token>`
 
 请求参数：
 
@@ -285,15 +289,16 @@ GET /users?page=1&limit=10
 - 方法：`GET`
 - 路径：`/task/list`
 - 描述：分页查询任务，支持按用户过滤
-- 是否鉴权：否
+- 用户信息验证：需登录 token
+- 请求头：`Authorization: Bearer <token>`
 
 请求参数：
 
-| 参数名   | 类型   | 是否必填 | 说明                |
-|----------|--------|----------|---------------------|
-| page     | number | 否       | 页码，默认 1        |
-| limit    | number | 否       | 每页数量，默认 20   |
-| userId   | number | 否       | 按用户 ID 过滤任务  |
+| 参数名 | 类型   | 是否必填 | 说明                |
+|--------|--------|----------|---------------------|
+| page   | number | 否       | 页码，默认 1        |
+| limit  | number | 否       | 每页数量，默认 20   |
+| userId | number | 否       | 按用户 ID 过滤任务  |
 
 请求示例：
 
@@ -336,7 +341,8 @@ GET /task/list?userId=1&page=1&limit=10
 - 方法：`GET`
 - 路径：`/task/:id`
 - 描述：根据任务 ID 查询任务详情
-- 是否鉴权：否
+- 用户信息验证：需登录 token
+- 请求头：`Authorization: Bearer <token>`
 
 请求示例：
 
@@ -377,7 +383,8 @@ GET /task/1
 - 方法：`PUT`
 - 路径：`/task/:id`
 - 描述：更新任务内容或完成状态
-- 是否鉴权：否
+- 用户信息验证：需登录 token
+- 请求头：`Authorization: Bearer <token>`
 
 请求参数：
 
@@ -430,7 +437,8 @@ GET /task/1
 - 方法：`DELETE`
 - 路径：`/task/:id`
 - 描述：删除指定任务
-- 是否鉴权：否
+- 用户信息验证：需登录 token
+- 请求头：`Authorization: Bearer <token>`
 
 请求示例：
 
@@ -452,6 +460,7 @@ DELETE /task/1
 
 ## 6. 备注
 
-- 当前接口均未实现 JWT 鉴权；如需生产环境使用，请补充登录令牌和中间件验证。
+- 登录鉴权：项目已集成基本的 JWT 验证。登录接口 `/users/login` 返回 `token` 字段（Bearer JWT），任务相关路由已受保护，需要在请求头中提供 `Authorization: Bearer <token>`。
+- JWT 配置：使用环境变量 `JWT_SECRET` 作为签名密钥，开发环境默认值为 `dev_secret_change_me`，建议生产环境设置安全随机字符串。
 - 数据库配置文件：`config/database.js`
 - 若数据库名称或账号密码不同，请根据实际环境调整配置。
