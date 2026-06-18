@@ -1,0 +1,8 @@
+# dependencies
+node_modules/
+
+# Others
+*-requirement.md
+
+# Database config (contains credentials)
+config/database.js
