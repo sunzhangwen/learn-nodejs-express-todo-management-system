@@ -3,10 +3,28 @@ node_modules/
 
 # Environment variables (contains secrets)
 .env
+.env.local
+.env.*.local
 
 # Database config (contains credentials)
 config/database.js
 
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
 # Others
-*-requirement.md
+*REQUIREMENT.md
 API_SPEC.md
+
+# Claude Code local settings
+.claude/

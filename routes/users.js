@@ -1,92 +1,53 @@
 const express = require('express')
-const { User } = require('../models')
-const jwt = require('jsonwebtoken')
-const { JWT_SECRET } = require('../config/config')
+const { User, Task } = require('../models')
 const { authMiddleware } = require('../middleware/auth')
+const { success, error } = require('../utils/response')
 
 const router = express.Router()
 
-router.get('/hello', (req, res) => {
-  res.json({
-    message: 'hello user'
-  })
-})
-
-router.get('/', authMiddleware, async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
-  const limit = Math.max(1, parseInt(req.query.limit, 10) || 20)
-  const offset = (page - 1) * limit
+// GET /user/profile - 获取用户信息
+router.get('/profile', authMiddleware, async (req, res) => {
+  const userId = req.user.id
 
   try {
-    const users = await User.findAll({
-      offset,
-      limit,
-      attributes: ['id', 'username', 'createdAt', 'updatedAt']
-    })
-
-    res.json({
-      code: 200,
-      msg: '查询成功',
-      data: users
-    })
-  } catch (error) {
-    console.error('查询用户失败', error)
-    res.status(500).json({ code: 500, msg: '查询用户失败' })
-  }
-})
-
-router.post('/register', async (req, res) => {
-  const { username, password } = req.body
-
-  if (!username || !password) {
-    return res.status(400).json({ code: 400, msg: '用户名和密码不能为空' })
-  }
-
-  try {
-    const existingUser = await User.findOne({ where: { username } })
-    if (existingUser) {
-      return res.status(409).json({ code: 409, msg: '用户名已存在' })
+    const user = await User.findByPk(userId)
+    if (!user) {
+      return error(res, '用户不存在', 404)
     }
 
-    const newUser = await User.create({
-      username,
-      password: await User.hashPassword(password)
-    })
+    // 获取用户统计数据
+    const today = new Date().toISOString().split('T')[0]
+    const [todayPending, totalPublished, totalCompleted] = await Promise.all([
+      Task.count({ where: { userId, date: today, status: 'pending' } }),
+      Task.count({ where: { userId } }),
+      Task.count({ where: { userId, status: 'completed' } })
+    ])
 
-    res.status(201).json({
-      code: 201,
-      msg: '注册成功',
-      data: newUser.toSafeObject()
-    })
-  } catch (error) {
-    console.error('注册失败', error)
-    res.status(500).json({ code: 500, msg: '注册失败' })
-  }
-})
+    // 获取分类统计
+    const [workCount, personalCount, activityCount] = await Promise.all([
+      Task.count({ where: { userId, category: 'work' } }),
+      Task.count({ where: { userId, category: 'personal' } }),
+      Task.count({ where: { userId, category: 'activity' } })
+    ])
 
-router.post('/login', async (req, res) => {
-  const { username, password } = req.body
-
-  if (!username || !password) {
-    return res.status(400).json({ code: 400, msg: '用户名和密码不能为空' })
-  }
-
-  try {
-    const user = await User.findOne({ where: { username } })
-    if (!user || !(await User.comparePassword(password, user.password))) {
-      return res.status(401).json({ code: 401, msg: '用户名或密码错误' })
+    const userData = {
+      ...user.toSafeObject(),
+      stats: {
+        todayPending,
+        totalPublished,
+        totalCompleted
+      },
+      categories: {
+        work: workCount,
+        personal: personalCount,
+        activity: activityCount
+      }
     }
 
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' })
-    res.json({
-      code: 200,
-      msg: '登录成功',
-      data: user.toSafeObject(),
-      token
-    })
-  } catch (error) {
-    console.error('登录失败', error)
-    res.status(500).json({ code: 500, msg: '登录失败' })
+    return success(res, userData, '操作成功')
+  } catch (err) {
+    console.error('查询用户信息失败', err)
+    return error(res, '网络异常，请稍后重试', 500)
   }
 })
 

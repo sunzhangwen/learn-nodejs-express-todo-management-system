@@ -1,137 +1,207 @@
 const express = require('express')
-const { Task, User } = require('../models')
+const { Task } = require('../models')
+const { authMiddleware } = require('../middleware/auth')
+const { success, error } = require('../utils/response')
 
 const router = express.Router()
-const { authMiddleware } = require('../middleware/auth')
 
-router.post('/create', authMiddleware, async (req, res) => {
-  const { title, description } = req.body
-  const userId = req.user.id  // 从 JWT token 中获取，不从客户端传入
-
-  if (!title) {
-    return res.status(400).json({ code: 400, msg: '任务标题不能为空' })
-  }
+// GET /tasks - 获取所有任务
+// GET /tasks?date={date} - 按日期获取任务
+router.get('/', authMiddleware, async (req, res) => {
+  const userId = req.user.id
+  const { date } = req.query
 
   try {
-    const task = await Task.create({ title, description, userId })
-    res.status(201).json({ code: 201, msg: '任务创建成功', data: task })
-  } catch (error) {
-    console.error('创建任务失败', error)
-    res.status(500).json({ code: 500, msg: '创建任务失败' })
-  }
-})
+    const where = { userId }
+    if (date) {
+      where.date = date
+    }
 
-router.get('/list', authMiddleware, async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1)
-  const limit = Math.max(1, parseInt(req.query.limit, 10) || 20)
-  const offset = (page - 1) * limit
-
-  // 只查询当前用户的任务
-  const where = { userId: req.user.id }
-
-  try {
     const tasks = await Task.findAll({
       where,
-      offset,
-      limit,
-      order: [['createdAt', 'DESC']],
-      include: [
-        {
-          model: User,
-          as: 'owner',
-          attributes: ['id', 'username']
-        }
-      ]
+      order: [['startTime', 'ASC']]
     })
 
-    res.json({ code: 200, msg: '查询成功', data: tasks })
-  } catch (error) {
-    console.error('查询任务失败', error)
-    res.status(500).json({ code: 500, msg: '查询任务失败' })
+    return success(res, tasks, '操作成功')
+  } catch (err) {
+    console.error('查询任务失败', err)
+    return error(res, '网络异常，请稍后重试', 500)
   }
 })
 
+// GET /tasks/:id - 获取单个任务详情
 router.get('/:id', authMiddleware, async (req, res) => {
   const taskId = req.params.id
+  const userId = req.user.id
 
   try {
-    const task = await Task.findByPk(taskId, {
-      include: [
-        {
-          model: User,
-          as: 'owner',
-          attributes: ['id', 'username']
-        }
-      ]
+    const task = await Task.findByPk(taskId)
+
+    if (!task) {
+      return success(res, null, '操作成功')
+    }
+
+    // 验证任务归属
+    if (task.userId !== userId) {
+      return error(res, '无权访问该任务', 403)
+    }
+
+    return success(res, task, '操作成功')
+  } catch (err) {
+    console.error('查询任务失败', err)
+    return error(res, '网络异常，请稍后重试', 500)
+  }
+})
+
+// POST /tasks - 创建任务
+router.post('/', authMiddleware, async (req, res) => {
+  const userId = req.user.id
+  const { title, category, startTime, endTime, location, note, date, status, isFeatured } = req.body
+
+  // 验证必填字段
+  if (!title) {
+    return error(res, '任务标题不能为空', 400)
+  }
+  if (!category || !['work', 'personal', 'activity'].includes(category)) {
+    return error(res, '分类无效，必须为 work/personal/activity', 400)
+  }
+  if (!startTime) {
+    return error(res, '开始时间不能为空', 400)
+  }
+  if (!date) {
+    return error(res, '日期不能为空', 400)
+  }
+  if (!status || !['pending', 'completed'].includes(status)) {
+    return error(res, '状态无效，必须为 pending/completed', 400)
+  }
+
+  try {
+    const task = await Task.create({
+      title,
+      category,
+      startTime,
+      endTime: endTime || null,
+      location: location || null,
+      note: note || null,
+      date,
+      status,
+      isFeatured: isFeatured || false,
+      userId
     })
 
-    if (!task) {
-      return res.status(404).json({ code: 404, msg: '任务未找到' })
-    }
-
-    // 验证任务归属
-    if (task.userId !== req.user.id) {
-      return res.status(403).json({ code: 403, msg: '无权访问该任务' })
-    }
-
-    res.json({ code: 200, msg: '查询成功', data: task })
-  } catch (error) {
-    console.error('查询任务失败', error)
-    res.status(500).json({ code: 500, msg: '查询任务失败' })
+    return success(res, task, '创建成功', 201)
+  } catch (err) {
+    console.error('创建任务失败', err)
+    return error(res, '网络异常，请稍后重试', 500)
   }
 })
 
+// PUT /tasks/:id - 更新任务
 router.put('/:id', authMiddleware, async (req, res) => {
   const taskId = req.params.id
-  const { title, description, completed } = req.body
+  const userId = req.user.id
+  const { title, category, startTime, endTime, location, note, date, status, isFeatured } = req.body
 
   try {
     const task = await Task.findByPk(taskId)
     if (!task) {
-      return res.status(404).json({ code: 404, msg: '任务未找到' })
+      return error(res, '任务不存在', 404)
     }
 
     // 验证任务归属
-    if (task.userId !== req.user.id) {
-      return res.status(403).json({ code: 403, msg: '无权修改该任务' })
+    if (task.userId !== userId) {
+      return error(res, '无权修改该任务', 403)
     }
 
-    const updates = {}
-    if (title !== undefined) updates.title = title
-    if (description !== undefined) updates.description = description
-    if (completed !== undefined) updates.completed = Boolean(completed)
-
-    if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ code: 400, msg: '没有提供可更新的字段' })
+    // 验证必填字段
+    if (!title) {
+      return error(res, '任务标题不能为空', 400)
+    }
+    if (!category || !['work', 'personal', 'activity'].includes(category)) {
+      return error(res, '分类无效，必须为 work/personal/activity', 400)
+    }
+    if (!startTime) {
+      return error(res, '开始时间不能为空', 400)
+    }
+    if (!date) {
+      return error(res, '日期不能为空', 400)
+    }
+    if (!status || !['pending', 'completed'].includes(status)) {
+      return error(res, '状态无效，必须为 pending/completed', 400)
     }
 
-    await task.update(updates)
-    res.json({ code: 200, msg: '更新成功', data: task })
-  } catch (error) {
-    console.error('更新任务失败', error)
-    res.status(500).json({ code: 500, msg: '更新任务失败' })
+    await task.update({
+      title,
+      category,
+      startTime,
+      endTime: endTime || null,
+      location: location || null,
+      note: note || null,
+      date,
+      status,
+      isFeatured: isFeatured || false
+    })
+
+    return success(res, task, '更新成功')
+  } catch (err) {
+    console.error('更新任务失败', err)
+    return error(res, '网络异常，请稍后重试', 500)
   }
 })
 
-router.delete('/:id', authMiddleware, async (req, res) => {
+// PATCH /tasks/:id/status - 更新任务状态
+router.patch('/:id/status', authMiddleware, async (req, res) => {
   const taskId = req.params.id
+  const userId = req.user.id
+  const { status } = req.body
+
+  // 验证状态值
+  if (!status || !['pending', 'completed'].includes(status)) {
+    return error(res, '状态无效，必须为 pending/completed', 400)
+  }
 
   try {
     const task = await Task.findByPk(taskId)
     if (!task) {
-      return res.status(404).json({ code: 404, msg: '任务未找到' })
+      return error(res, '任务不存在', 404)
     }
 
     // 验证任务归属
-    if (task.userId !== req.user.id) {
-      return res.status(403).json({ code: 403, msg: '无权删除该任务' })
+    if (task.userId !== userId) {
+      return error(res, '无权修改该任务', 403)
+    }
+
+    await task.update({ status })
+
+    return success(res, task, '更新成功')
+  } catch (err) {
+    console.error('更新任务状态失败', err)
+    return error(res, '网络异常，请稍后重试', 500)
+  }
+})
+
+// DELETE /tasks/:id - 删除任务
+router.delete('/:id', authMiddleware, async (req, res) => {
+  const taskId = req.params.id
+  const userId = req.user.id
+
+  try {
+    const task = await Task.findByPk(taskId)
+    if (!task) {
+      return error(res, '任务不存在', 404)
+    }
+
+    // 验证任务归属
+    if (task.userId !== userId) {
+      return error(res, '无权删除该任务', 403)
     }
 
     await task.destroy()
-    res.json({ code: 200, msg: '删除成功' })
-  } catch (error) {
-    console.error('删除任务失败', error)
-    res.status(500).json({ code: 500, msg: '删除任务失败' })
+
+    return success(res, { id: parseInt(taskId) }, '删除成功')
+  } catch (err) {
+    console.error('删除任务失败', err)
+    return error(res, '网络异常，请稍后重试', 500)
   }
 })
 

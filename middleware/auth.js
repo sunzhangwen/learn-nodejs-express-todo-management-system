@@ -5,7 +5,7 @@ function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization || ''
   const match = authHeader.match(/^Bearer\s+(.*)$/i)
   if (!match) {
-    return res.status(401).json({ code: 401, msg: '未提供授权 token' })
+    return res.status(401).json({ success: false, data: null, message: '未提供授权 token' })
   }
 
   const token = match[1]
@@ -14,7 +14,7 @@ function authMiddleware(req, res, next) {
     req.user = payload
     return next()
   } catch (err) {
-    return res.status(401).json({ code: 401, msg: '无效或过期的 token' })
+    return res.status(401).json({ success: false, data: null, message: '无效或过期的 token' })
   }
 }
 

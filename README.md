@@ -1,17 +1,17 @@
-# Node.js Express Todos Management System
+# Node.js Express 日程 Todo 后端系统
 
-简洁专业的 Node.js + Express + Sequelize MySQL 后端项目，支持用户管理和任务管理 RESTful API。
+基于 Node.js + Express + Sequelize + MySQL 的日程管理后端 API，支持用户认证和任务管理。
 
 ## 1. 项目简介
 
-该项目使用 Express 提供 RESTful API，使用 Sequelize 连接 MySQL 数据库并自动同步表结构。
+本项目是一个日程 Todo 管理系统的后端服务，提供完整的 RESTful API，支持：
 
-功能模块：
-
-- 用户注册、登录（bcrypt 密码哈希 + JWT 认证）
-- 用户列表查询（需认证）
-- 任务 CRUD 操作（需认证，含权限校验）
-- 环境变量集中管理，敏感配置隔离
+- 用户注册、登录、登出（bcrypt 密码哈希 + JWT 认证）
+- 任务 CRUD 操作（创建、查询、更新、删除）
+- 按日期筛选任务
+- 任务状态管理（pending/completed）
+- 用户信息及统计数据
+- 统一响应格式
 
 ## 2. 技术栈
 
@@ -44,14 +44,18 @@
 │   ├── Task.js              # 任务模型定义
 │   └── User.js              # 用户模型定义（bcrypt 密码哈希）
 ├── routes/
+│   ├── auth.js              # 认证路由（登录、注册、登出）
 │   ├── tasks.js             # 任务管理路由（JWT 保护 + 权限校验）
-│   └── users.js             # 用户管理路由
+│   └── users.js             # 用户信息路由
 ├── middleware/
 │   └── auth.js              # JWT 鉴权中间件
+├── utils/
+│   └── response.js          # 统一响应格式工具
 ├── __tests__/
 │   └── api.test.js          # API 接口测试
 ├── app.js                   # Express 应用实例（独立导出，供测试引用）
 ├── main_index.js            # 服务启动入口
+├── TEST_GUIDE.md            # 接口测试指南（含 SQL 和 curl 示例）
 ├── .env.example             # 环境变量模板
 ├── .gitignore
 ├── package.json
@@ -92,8 +96,10 @@ cp .env.example .env
 确保 MySQL 已运行，并创建数据库：
 
 ```sql
-CREATE DATABASE IF NOT EXISTS js_test_db;
+CREATE DATABASE IF NOT EXISTS js_test DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
+
+> 详细的数据库初始化和测试数据请参考 [TEST_GUIDE.md](./TEST_GUIDE.md)
 
 ### 4.4 启动服务
 
@@ -107,159 +113,76 @@ npm run dev
 
 服务默认监听：`http://localhost:3000`
 
-## 5. 接口文档
+## 5. 接口概览
 
-### 5.1 用户模块
+**基础路径**: `/api`
 
-#### 注册用户
+**统一响应格式**:
+```json
+{
+  "success": true,
+  "data": {},
+  "message": "操作成功"
+}
+```
 
-- **POST** `/users/register`
-- 无需 token
+### 认证接口
 
-| 参数 | 类型 | 必填 | 说明 |
+| 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| username | string | 是 | 用户名 |
-| password | string | 是 | 密码 |
+| POST | `/api/auth/register` | 用户注册 | 否 |
+| POST | `/api/auth/login` | 用户登录 | 否 |
+| POST | `/api/auth/logout` | 用户登出 | 是 |
 
-成功响应（201）：
+### 用户接口
 
-```json
-{
-  "code": 201,
-  "msg": "注册成功",
-  "data": { "id": 1, "username": "alice", "createdAt": "...", "updatedAt": "..." }
-}
-```
-
-失败响应：400（参数缺失）、409（用户名已存在）
-
-#### 用户登录
-
-- **POST** `/users/login`
-- 无需 token
-
-| 参数 | 类型 | 必填 | 说明 |
+| 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| username | string | 是 | 用户名 |
-| password | string | 是 | 密码 |
+| GET | `/api/user/profile` | 获取用户信息（含统计） | 是 |
 
-成功响应（200）：
+### 任务接口
 
-```json
-{
-  "code": 200,
-  "msg": "登录成功",
-  "data": { "id": 1, "username": "alice", "createdAt": "...", "updatedAt": "..." },
-  "token": "<JWT_TOKEN>"
-}
-```
-
-失败响应：400（参数缺失）、401（用户名或密码错误）
-
-#### 查询用户列表
-
-- **GET** `/users?page=1&limit=20`
-- 需要 token：`Authorization: Bearer <token>`
-
-成功响应（200）：
-
-```json
-{
-  "code": 200,
-  "msg": "查询成功",
-  "data": [{ "id": 1, "username": "alice", "createdAt": "...", "updatedAt": "..." }]
-}
-```
-
-### 5.2 任务模块
-
-所有任务接口均需要 token：`Authorization: Bearer <token>`
-
-任务操作（查询、更新、删除）会验证任务归属，只能操作自己的任务。
-
-#### 创建任务
-
-- **POST** `/tasks/create`
-
-| 参数 | 类型 | 必填 | 说明 |
+| 方法 | 路径 | 说明 | 认证 |
 |------|------|------|------|
-| title | string | 是 | 任务标题 |
-| description | string | 否 | 任务描述 |
+| GET | `/api/tasks` | 获取所有任务 | 是 |
+| GET | `/api/tasks?date=YYYY-MM-DD` | 按日期获取任务 | 是 |
+| GET | `/api/tasks/:id` | 获取单个任务 | 是 |
+| POST | `/api/tasks` | 创建任务 | 是 |
+| PUT | `/api/tasks/:id` | 更新任务 | 是 |
+| PATCH | `/api/tasks/:id/status` | 更新任务状态 | 是 |
+| DELETE | `/api/tasks/:id` | 删除任务 | 是 |
 
-> userId 自动从 JWT token 中获取，无需客户端传入。
+> 详细的接口参数和测试示例请参考 [TEST_GUIDE.md](./TEST_GUIDE.md)
 
-成功响应（201）：
+## 6. 数据模型
 
-```json
-{
-  "code": 201,
-  "msg": "任务创建成功",
-  "data": { "id": 1, "title": "编写文档", "description": "...", "completed": false, "userId": 1, "createdAt": "...", "updatedAt": "..." }
-}
-```
+### User（用户）
 
-#### 查询任务列表
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | integer | 主键，自增 |
+| name | string | 用户名 |
+| email | string | 邮箱（唯一） |
+| password | string | 密码（bcrypt 加密） |
+| avatar | string/null | 头像 URL |
 
-- **GET** `/tasks/list?page=1&limit=20`
-- 只返回当前登录用户的任务
+### Task（任务）
 
-成功响应（200）：
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | integer | 主键，自增 |
+| title | string | 任务标题 |
+| category | enum | 分类：work/personal/activity |
+| startTime | string | 开始时间 HH:mm |
+| endTime | string | 结束时间 HH:mm |
+| location | string | 地点 |
+| note | string | 备注 |
+| date | string | 日期 YYYY-MM-DD |
+| status | enum | 状态：pending/completed |
+| isFeatured | boolean | 是否重要 |
+| userId | integer | 用户 ID（外键） |
 
-```json
-{
-  "code": 200,
-  "msg": "查询成功",
-  "data": [
-    {
-      "id": 1,
-      "title": "编写文档",
-      "description": "...",
-      "completed": false,
-      "userId": 1,
-      "createdAt": "...",
-      "updatedAt": "...",
-      "owner": { "id": 1, "username": "alice" }
-    }
-  ]
-}
-```
-
-#### 查询单个任务
-
-- **GET** `/tasks/:id`
-- 非本人任务返回 403
-
-#### 更新任务
-
-- **PUT** `/tasks/:id`
-
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| title | string | 否 | 任务标题 |
-| description | string | 否 | 任务描述 |
-| completed | boolean | 否 | 是否完成 |
-
-非本人任务返回 403。
-
-#### 删除任务
-
-- **DELETE** `/tasks/:id`
-- 非本人任务返回 403
-
-### 5.3 响应状态码汇总
-
-| 状态码 | 说明 |
-|--------|------|
-| 200 | 成功 |
-| 201 | 创建成功 |
-| 400 | 参数错误 |
-| 401 | 未认证或 token 无效 |
-| 403 | 无权操作 |
-| 404 | 资源不存在 |
-| 409 | 冲突（用户名已存在） |
-| 500 | 服务器内部错误 |
-
-## 6. 安全机制
+## 7. 安全机制
 
 | 机制 | 说明 |
 |------|------|
@@ -270,7 +193,9 @@ npm run dev
 | 任务权限 | 创建任务从 token 取 userId，更新/删除验证任务归属 |
 | 敏感配置 | `database.js` 和 `.env` 已加入 `.gitignore` |
 
-## 7. 测试
+## 8. 测试
+
+### 运行自动化测试
 
 ```bash
 npm test
@@ -278,13 +203,20 @@ npm test
 
 测试覆盖：
 
-- 用户注册（成功、重复、缺参）
-- 用户登录（成功、密码错误）
-- 用户列表认证
+- 认证接口（注册、登录、登出）
+- 用户信息接口
 - 任务 CRUD（创建、列表、查询、更新、删除）
-- 任务权限校验
+- 日期筛选
+- 状态更新
+- 权限校验
 
-## 8. 备注
+### 手动测试
+
+详细的接口测试指南（含数据库初始化 SQL 和 curl 示例）请参考：
+
+📄 **[TEST_GUIDE.md](./TEST_GUIDE.md)**
+
+## 9. 备注
 
 - 数据库配置文件 `config/database.js` 包含真实凭据，已加入 `.gitignore` 不会提交
 - 首次使用请复制 `config/database.example.js` 为 `config/database.js` 并填入真实配置

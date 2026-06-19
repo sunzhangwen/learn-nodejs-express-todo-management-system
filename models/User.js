@@ -15,23 +15,33 @@ class User extends Model {
 
   // 返回不包含敏感字段的用户信息
   toSafeObject() {
-    const { id, username, createdAt, updatedAt } = this
-    return { id, username, createdAt, updatedAt }
+    const { id, name, email, avatar, createdAt, updatedAt } = this
+    return { id, name, email, avatar, createdAt, updatedAt }
   }
 }
 
 User.init(
   {
-    username: {
+    name: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      comment: '用户名'
+    },
+    email: {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
-      comment: '用户名'
+      comment: '邮箱'
     },
     password: {
       type: DataTypes.STRING,
       allowNull: false,
       comment: '密码'
+    },
+    avatar: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: '头像 URL'
     }
   },
   {

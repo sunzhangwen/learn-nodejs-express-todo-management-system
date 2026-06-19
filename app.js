@@ -1,7 +1,8 @@
 const express = require('express')
 const cors = require('cors')
-const userRouter = require('./routes/users.js')
+const authRouter = require('./routes/auth.js')
 const taskRouter = require('./routes/tasks.js')
+const userRouter = require('./routes/users.js')
 const { CORS_ORIGIN } = require('./config/config')
 
 const app = express()
@@ -14,7 +15,9 @@ const corsOptions = CORS_ORIGIN === '*'
   : { origin: CORS_ORIGIN.split(',').map(s => s.trim()) }
 app.use(cors(corsOptions))
 
-app.use('/users', userRouter)
-app.use('/tasks', taskRouter)
+// API 路由挂载
+app.use('/api/auth', authRouter)
+app.use('/api/tasks', taskRouter)
+app.use('/api/user', userRouter)
 
 module.exports = app
