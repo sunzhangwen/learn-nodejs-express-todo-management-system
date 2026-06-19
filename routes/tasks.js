@@ -5,22 +5,14 @@ const router = express.Router()
 const { authMiddleware } = require('../middleware/auth')
 
 router.post('/create', authMiddleware, async (req, res) => {
-  const { title, description, userId } = req.body
+  const { title, description } = req.body
+  const userId = req.user.id  // 从 JWT token 中获取，不从客户端传入
 
   if (!title) {
     return res.status(400).json({ code: 400, msg: '任务标题不能为空' })
   }
 
-  if (!userId) {
-    return res.status(400).json({ code: 400, msg: 'userId 不能为空' })
-  }
-
   try {
-    const user = await User.findByPk(userId)
-    if (!user) {
-      return res.status(404).json({ code: 404, msg: '用户不存在' })
-    }
-
     const task = await Task.create({ title, description, userId })
     res.status(201).json({ code: 201, msg: '任务创建成功', data: task })
   } catch (error) {
@@ -33,12 +25,9 @@ router.get('/list', authMiddleware, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.max(1, parseInt(req.query.limit, 10) || 20)
   const offset = (page - 1) * limit
-  const userId = req.query.userId ? parseInt(req.query.userId, 10) : undefined
 
-  const where = {}
-  if (userId) {
-    where.userId = userId
-  }
+  // 只查询当前用户的任务
+  const where = { userId: req.user.id }
 
   try {
     const tasks = await Task.findAll({
@@ -80,6 +69,11 @@ router.get('/:id', authMiddleware, async (req, res) => {
       return res.status(404).json({ code: 404, msg: '任务未找到' })
     }
 
+    // 验证任务归属
+    if (task.userId !== req.user.id) {
+      return res.status(403).json({ code: 403, msg: '无权访问该任务' })
+    }
+
     res.json({ code: 200, msg: '查询成功', data: task })
   } catch (error) {
     console.error('查询任务失败', error)
@@ -95,6 +89,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
     const task = await Task.findByPk(taskId)
     if (!task) {
       return res.status(404).json({ code: 404, msg: '任务未找到' })
+    }
+
+    // 验证任务归属
+    if (task.userId !== req.user.id) {
+      return res.status(403).json({ code: 403, msg: '无权修改该任务' })
     }
 
     const updates = {}
@@ -121,6 +120,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     const task = await Task.findByPk(taskId)
     if (!task) {
       return res.status(404).json({ code: 404, msg: '任务未找到' })
+    }
+
+    // 验证任务归属
+    if (task.userId !== req.user.id) {
+      return res.status(403).json({ code: 403, msg: '无权删除该任务' })
     }
 
     await task.destroy()

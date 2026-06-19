@@ -1,312 +1,209 @@
-﻿# Nodejs Express Todos Management System
+# Node.js Express Todos Management System
 
-简洁专业的 Node.js + Express + Sequelize MySQL 示例项目，支持用户管理和任务管理接口。
+简洁专业的 Node.js + Express + Sequelize MySQL 后端项目，支持用户管理和任务管理 RESTful API。
 
 ## 1. 项目简介
 
-该项目使用 `Express` 提供 RESTful API，使用 `Sequelize` 连接 MySQL 数据库并自动同步表结构。当前实现：
+该项目使用 Express 提供 RESTful API，使用 Sequelize 连接 MySQL 数据库并自动同步表结构。
 
-- 用户注册、登录、用户列表查询
-- 任务创建、查询、更新、删除
-- MySQL 数据库连接与模型关联
+功能模块：
 
-## 2. 运行环境
+- 用户注册、登录（bcrypt 密码哈希 + JWT 认证）
+- 用户列表查询（需认证）
+- 任务 CRUD 操作（需认证，含权限校验）
+- 环境变量集中管理，敏感配置隔离
 
-- Node.js
-- MySQL
-- 通过 npm 安装依赖：`express`、`sequelize`、`mysql2`、`cors`、`jsonwebtoken`
+## 2. 技术栈
+
+| 依赖 | 版本 | 用途 |
+|------|------|------|
+| express | ^5.2.1 | Web 框架 |
+| sequelize | ^6.37.8 | ORM |
+| mysql2 | ^3.22.4 | MySQL 驱动 |
+| cors | ^2.8.6 | 跨域配置 |
+| jsonwebtoken | ^9.0.2 | JWT 认证 |
+| bcrypt | ^6.0.0 | 密码哈希 |
+| dotenv | ^16.x | 环境变量加载 |
+
+开发依赖：
+
+| 依赖 | 用途 |
+|------|------|
+| jest | 测试框架 |
+| supertest | HTTP 接口测试 |
 
 ## 3. 项目目录结构
 
 ```
 ├── config/
-│   └── database.js       # Sequelize MySQL 连接配置
+│   ├── database.js          # Sequelize MySQL 连接配置（已 gitignore）
+│   ├── database.example.js  # 数据库配置模板
+│   └── config.js            # 环境变量集中管理
 ├── models/
-│   ├── index.js         # 模型关联与同步入口
-│   ├── Task.js          # 任务模型定义
-│   └── User.js          # 用户模型定义
+│   ├── index.js             # 模型关联与同步入口
+│   ├── Task.js              # 任务模型定义
+│   └── User.js              # 用户模型定义（bcrypt 密码哈希）
 ├── routes/
-│   ├── tasks.js         # 任务管理路由
-│   └── users.js         # 用户管理路由
+│   ├── tasks.js             # 任务管理路由（JWT 保护 + 权限校验）
+│   └── users.js             # 用户管理路由
 ├── middleware/
-│   └── auth.js          # JWT 鉴权中间件
-├── main_index.js        # 应用主入口文件
-├── package.json         # 项目依赖及脚本
-└── README.md            # 项目说明文档
+│   └── auth.js              # JWT 鉴权中间件
+├── __tests__/
+│   └── api.test.js          # API 接口测试
+├── app.js                   # Express 应用实例（独立导出，供测试引用）
+├── main_index.js            # 服务启动入口
+├── .env.example             # 环境变量模板
+├── .gitignore
+├── package.json
+└── README.md
 ```
 
 ## 4. 安装与启动
 
-在项目根目录执行：
+### 4.1 安装依赖
 
 ```bash
-cd d:\Workspace\js\learn-nodejs-express-todo-management-system
 npm install
 ```
 
-确保 MySQL 已运行，并且已创建数据库：
+### 4.2 配置环境变量
+
+复制配置模板并按实际情况修改：
+
+```bash
+# 数据库配置
+cp config/database.example.js config/database.js
+
+# 环境变量
+cp .env.example .env
+```
+
+`.env` 文件说明：
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| JWT_SECRET | 生产环境必填 | JWT 签名密钥 |
+| PORT | 否 | 服务端口，默认 3000 |
+| CORS_ORIGIN | 否 | 允许的跨域源，逗号分隔，默认 `*` |
+| NODE_ENV | 否 | 运行环境，默认 `development` |
+
+### 4.3 准备数据库
+
+确保 MySQL 已运行，并创建数据库：
 
 ```sql
 CREATE DATABASE IF NOT EXISTS js_test_db;
 ```
 
-如果需要修改数据库配置，请编辑：`config/database.js`
-
-启动服务：
+### 4.4 启动服务
 
 ```bash
+# 生产模式
 npm start
-```
 
-开发模式：
-
-```bash
+# 开发模式（自动重启）
 npm run dev
 ```
 
-如果需要直接运行入口文件：
-
-```bash
-node main_index.js
-nodemon main_index.js
-```
-
-服务默认监听：
-
-```
-http://localhost:3000
-```
+服务默认监听：`http://localhost:3000`
 
 ## 5. 接口文档
 
 ### 5.1 用户模块
 
-#### 1) 注册用户
+#### 注册用户
 
-- 方法：`POST`
-- 路径：`/users/register`
-- 描述：创建新用户账号
-- 用户信息验证：无需 token
+- **POST** `/users/register`
+- 无需 token
 
-请求参数：
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| username | string | 是 | 用户名 |
+| password | string | 是 | 密码 |
 
-| 参数名   | 类型   | 是否必填 | 说明   |
-|---------|--------|----------|--------|
-| username | string | 是       | 用户名 |
-| password | string | 是       | 密码   |
-
-请求示例：
-
-```json
-{
-  "username": "alice",
-  "password": "123456"
-}
-```
-
-成功响应：
+成功响应（201）：
 
 ```json
 {
   "code": 201,
   "msg": "注册成功",
-  "data": {
-    "id": 1,
-    "username": "alice",
-    "createdAt": "2026-06-06T00:00:00.000Z",
-    "updatedAt": "2026-06-06T00:00:00.000Z"
-  }
+  "data": { "id": 1, "username": "alice", "createdAt": "...", "updatedAt": "..." }
 }
 ```
 
-失败响应：
+失败响应：400（参数缺失）、409（用户名已存在）
 
-- 参数缺失：
-```json
-{ "code": 400, "msg": "用户名和密码不能为空" }
-```
-- 用户已存在：
-```json
-{ "code": 409, "msg": "用户名已存在" }
-```
+#### 用户登录
 
-#### 2) 用户登录
+- **POST** `/users/login`
+- 无需 token
 
-- 方法：`POST`
-- 路径：`/users/login`
-- 描述：校验用户名与密码
-- 用户信息验证：无需 token
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| username | string | 是 | 用户名 |
+| password | string | 是 | 密码 |
 
-请求参数：
-
-| 参数名   | 类型   | 是否必填 | 说明   |
-|---------|--------|----------|--------|
-| username | string | 是       | 用户名 |
-| password | string | 是       | 密码   |
-
-请求示例：
-
-```json
-{
-  "username": "alice",
-  "password": "123456"
-}
-```
-
-成功响应：
+成功响应（200）：
 
 ```json
 {
   "code": 200,
   "msg": "登录成功",
-  "data": {
-    "id": 1,
-    "username": "alice",
-    "createdAt": "2026-06-06T00:00:00.000Z",
-    "updatedAt": "2026-06-06T00:00:00.000Z"
-  },
+  "data": { "id": 1, "username": "alice", "createdAt": "...", "updatedAt": "..." },
   "token": "<JWT_TOKEN>"
 }
 ```
 
-失败响应：
+失败响应：400（参数缺失）、401（用户名或密码错误）
 
-- 参数缺失：
-```json
-{ "code": 400, "msg": "用户名和密码不能为空" }
-```
-- 登录失败：
-```json
-{ "code": 401, "msg": "用户名或密码错误" }
-```
+#### 查询用户列表
 
-#### 3) 查询用户列表
+- **GET** `/users?page=1&limit=20`
+- 需要 token：`Authorization: Bearer <token>`
 
-- 方法：`GET`
-- 路径：`/users`
-- 描述：分页获取用户列表
-- 用户信息验证：无需 token
-
-请求参数：
-
-| 参数名 | 类型   | 是否必填 | 说明           |
-|--------|--------|----------|----------------|
-| page   | number | 否       | 页码，默认 1   |
-| limit  | number | 否       | 每页数量，默认 20 |
-
-请求示例：
-
-```
-GET /users?page=1&limit=10
-```
-
-成功响应：
+成功响应（200）：
 
 ```json
 {
   "code": 200,
   "msg": "查询成功",
-  "data": [
-    {
-      "id": 1,
-      "username": "alice",
-      "createdAt": "2026-06-06T00:00:00.000Z",
-      "updatedAt": "2026-06-06T00:00:00.000Z"
-    }
-  ]
+  "data": [{ "id": 1, "username": "alice", "createdAt": "...", "updatedAt": "..." }]
 }
-```
-
-失败响应：
-
-```json
-{ "code": 500, "msg": "查询用户失败" }
 ```
 
 ### 5.2 任务模块
 
-#### 1) 创建任务
+所有任务接口均需要 token：`Authorization: Bearer <token>`
 
-- 方法：`POST`
-- 路径：`/task/create`
-- 描述：新增任务记录
-- 用户信息验证：需登录 token
-- 请求头：`Authorization: Bearer <token>`
+任务操作（查询、更新、删除）会验证任务归属，只能操作自己的任务。
 
-请求参数：
+#### 创建任务
 
-| 参数名      | 类型   | 是否必填 | 说明         |
-|-------------|--------|----------|--------------|
-| title       | string | 是       | 任务标题     |
-| description | string | 否       | 任务描述     |
-| userId      | number | 是       | 任务所属用户 ID |
+- **POST** `/tasks/create`
 
-请求示例：
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| title | string | 是 | 任务标题 |
+| description | string | 否 | 任务描述 |
 
-```json
-{
-  "title": "编写文档",
-  "description": "完成 README 文档编写",
-  "userId": 1
-}
-```
+> userId 自动从 JWT token 中获取，无需客户端传入。
 
-成功响应：
+成功响应（201）：
 
 ```json
 {
   "code": 201,
   "msg": "任务创建成功",
-  "data": {
-    "id": 1,
-    "title": "编写文档",
-    "description": "完成 README 文档编写",
-    "completed": false,
-    "userId": 1,
-    "createdAt": "2026-06-06T00:00:00.000Z",
-    "updatedAt": "2026-06-06T00:00:00.000Z"
-  }
+  "data": { "id": 1, "title": "编写文档", "description": "...", "completed": false, "userId": 1, "createdAt": "...", "updatedAt": "..." }
 }
 ```
 
-失败响应：
+#### 查询任务列表
 
-- title 缺失：
-```json
-{ "code": 400, "msg": "任务标题不能为空" }
-```
-- userId 缺失：
-```json
-{ "code": 400, "msg": "userId 不能为空" }
-```
-- 用户不存在：
-```json
-{ "code": 404, "msg": "用户不存在" }
-```
+- **GET** `/tasks/list?page=1&limit=20`
+- 只返回当前登录用户的任务
 
-#### 2) 查询任务列表
-
-- 方法：`GET`
-- 路径：`/task/list`
-- 描述：分页查询任务，支持按用户过滤
-- 用户信息验证：需登录 token
-- 请求头：`Authorization: Bearer <token>`
-
-请求参数：
-
-| 参数名 | 类型   | 是否必填 | 说明                |
-|--------|--------|----------|---------------------|
-| page   | number | 否       | 页码，默认 1        |
-| limit  | number | 否       | 每页数量，默认 20   |
-| userId | number | 否       | 按用户 ID 过滤任务  |
-
-请求示例：
-
-```
-GET /task/list?userId=1&page=1&limit=10
-```
-
-成功响应：
+成功响应（200）：
 
 ```json
 {
@@ -316,151 +213,80 @@ GET /task/list?userId=1&page=1&limit=10
     {
       "id": 1,
       "title": "编写文档",
-      "description": "完成 README 文档编写",
+      "description": "...",
       "completed": false,
       "userId": 1,
-      "createdAt": "2026-06-06T00:00:00.000Z",
-      "updatedAt": "2026-06-06T00:00:00.000Z",
-      "owner": {
-        "id": 1,
-        "username": "alice"
-      }
+      "createdAt": "...",
+      "updatedAt": "...",
+      "owner": { "id": 1, "username": "alice" }
     }
   ]
 }
 ```
 
-失败响应：
+#### 查询单个任务
 
-```json
-{ "code": 500, "msg": "查询任务失败" }
+- **GET** `/tasks/:id`
+- 非本人任务返回 403
+
+#### 更新任务
+
+- **PUT** `/tasks/:id`
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| title | string | 否 | 任务标题 |
+| description | string | 否 | 任务描述 |
+| completed | boolean | 否 | 是否完成 |
+
+非本人任务返回 403。
+
+#### 删除任务
+
+- **DELETE** `/tasks/:id`
+- 非本人任务返回 403
+
+### 5.3 响应状态码汇总
+
+| 状态码 | 说明 |
+|--------|------|
+| 200 | 成功 |
+| 201 | 创建成功 |
+| 400 | 参数错误 |
+| 401 | 未认证或 token 无效 |
+| 403 | 无权操作 |
+| 404 | 资源不存在 |
+| 409 | 冲突（用户名已存在） |
+| 500 | 服务器内部错误 |
+
+## 6. 安全机制
+
+| 机制 | 说明 |
+|------|------|
+| 密码存储 | 使用 bcrypt 加盐哈希（10 轮） |
+| JWT 认证 | 登录签发 7 天有效期 token |
+| JWT 密钥 | 从环境变量 `JWT_SECRET` 读取，生产环境强制要求设置 |
+| CORS | 通过 `CORS_ORIGIN` 环境变量控制允许的源 |
+| 任务权限 | 创建任务从 token 取 userId，更新/删除验证任务归属 |
+| 敏感配置 | `database.js` 和 `.env` 已加入 `.gitignore` |
+
+## 7. 测试
+
+```bash
+npm test
 ```
 
-#### 3) 查询单个任务
+测试覆盖：
 
-- 方法：`GET`
-- 路径：`/task/:id`
-- 描述：根据任务 ID 查询任务详情
-- 用户信息验证：需登录 token
-- 请求头：`Authorization: Bearer <token>`
+- 用户注册（成功、重复、缺参）
+- 用户登录（成功、密码错误）
+- 用户列表认证
+- 任务 CRUD（创建、列表、查询、更新、删除）
+- 任务权限校验
 
-请求示例：
+## 8. 备注
 
-```
-GET /task/1
-```
-
-成功响应：
-
-```json
-{
-  "code": 200,
-  "msg": "查询成功",
-  "data": {
-    "id": 1,
-    "title": "编写文档",
-    "description": "完成 README 文档编写",
-    "completed": false,
-    "userId": 1,
-    "createdAt": "2026-06-06T00:00:00.000Z",
-    "updatedAt": "2026-06-06T00:00:00.000Z",
-    "owner": {
-      "id": 1,
-      "username": "alice"
-    }
-  }
-}
-```
-
-失败响应：
-
-```json
-{ "code": 404, "msg": "任务未找到" }
-```
-
-#### 4) 更新任务
-
-- 方法：`PUT`
-- 路径：`/task/:id`
-- 描述：更新任务内容或完成状态
-- 用户信息验证：需登录 token
-- 请求头：`Authorization: Bearer <token>`
-
-请求参数：
-
-| 参数名      | 类型    | 是否必填 | 说明           |
-|-------------|---------|----------|----------------|
-| title       | string  | 否       | 任务标题       |
-| description | string  | 否       | 任务描述       |
-| completed   | boolean | 否       | 是否完成       |
-
-请求示例：
-
-```json
-{
-  "title": "更新 README",
-  "completed": true
-}
-```
-
-成功响应：
-
-```json
-{
-  "code": 200,
-  "msg": "更新成功",
-  "data": {
-    "id": 1,
-    "title": "更新 README",
-    "description": "完成 README 文档编写",
-    "completed": true,
-    "userId": 1,
-    "createdAt": "2026-06-06T00:00:00.000Z",
-    "updatedAt": "2026-06-06T00:00:00.000Z"
-  }
-}
-```
-
-失败响应：
-
-- 任务不存在：
-```json
-{ "code": 404, "msg": "任务未找到" }
-```
-- 无更新字段：
-```json
-{ "code": 400, "msg": "没有提供可更新的字段" }
-```
-
-#### 5) 删除任务
-
-- 方法：`DELETE`
-- 路径：`/task/:id`
-- 描述：删除指定任务
-- 用户信息验证：需登录 token
-- 请求头：`Authorization: Bearer <token>`
-
-请求示例：
-
-```
-DELETE /task/1
-```
-
-成功响应：
-
-```json
-{ "code": 200, "msg": "删除成功" }
-```
-
-失败响应：
-
-```json
-{ "code": 404, "msg": "任务未找到" }
-```
-
-## 6. 备注
-
-- 登录鉴权：项目已集成基本的 JWT 验证。登录接口 `/users/login` 返回 `token` 字段（Bearer JWT），任务相关路由已受保护，需要在请求头中提供 `Authorization: Bearer <token>`。
-- JWT 配置：使用环境变量 `JWT_SECRET` 作为签名密钥，开发环境默认值为 `dev_secret_change_me`，建议生产环境设置安全随机字符串。
-- 数据库配置文件：`config/database.js`
-- 若数据库名称或账号密码不同，请根据实际环境调整配置。
+- 数据库配置文件 `config/database.js` 包含真实凭据，已加入 `.gitignore` 不会提交
+- 首次使用请复制 `config/database.example.js` 为 `config/database.js` 并填入真实配置
+- 生产环境务必设置 `JWT_SECRET` 环境变量
+- 生产环境建议将 `CORS_ORIGIN` 设置为具体的前端域名

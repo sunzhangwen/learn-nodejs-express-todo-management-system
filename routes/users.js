@@ -1,8 +1,8 @@
 const express = require('express')
 const { User } = require('../models')
 const jwt = require('jsonwebtoken')
-
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret_change_me'
+const { JWT_SECRET } = require('../config/config')
+const { authMiddleware } = require('../middleware/auth')
 
 const router = express.Router()
 
@@ -12,7 +12,7 @@ router.get('/hello', (req, res) => {
   })
 })
 
-router.get('/', async (req, res) => {
+router.get('/', authMiddleware, async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page, 10) || 1)
   const limit = Math.max(1, parseInt(req.query.limit, 10) || 20)
   const offset = (page - 1) * limit
@@ -50,7 +50,7 @@ router.post('/register', async (req, res) => {
 
     const newUser = await User.create({
       username,
-      password: User.hashPassword(password)
+      password: await User.hashPassword(password)
     })
 
     res.status(201).json({
@@ -73,7 +73,7 @@ router.post('/login', async (req, res) => {
 
   try {
     const user = await User.findOne({ where: { username } })
-    if (!user || user.password !== User.hashPassword(password)) {
+    if (!user || !(await User.comparePassword(password, user.password))) {
       return res.status(401).json({ code: 401, msg: '用户名或密码错误' })
     }
 

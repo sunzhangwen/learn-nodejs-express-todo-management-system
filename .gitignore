@@ -1,8 +1,12 @@
 # dependencies
 node_modules/
 
-# Others
-*-requirement.md
+# Environment variables (contains secrets)
+.env
 
 # Database config (contains credentials)
 config/database.js
+
+# Others
+*-requirement.md
+API_SPEC.md
