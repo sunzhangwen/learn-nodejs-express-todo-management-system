@@ -5,6 +5,12 @@ class Task extends Model {}
 
 Task.init(
   {
+    id: {
+      type: DataTypes.STRING,
+      primaryKey: true,
+      allowNull: false,
+      comment: '任务唯一标识，格式 id_xxxxxxxxxx'
+    },
     title: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -53,7 +59,7 @@ Task.init(
       comment: '是否重要/置顶'
     },
     userId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.STRING,
       allowNull: false,
       comment: '任务所属用户 ID'
     }

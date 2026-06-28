@@ -25,6 +25,7 @@ Thumbs.db
 # Others
 *REQUIREMENT.md
 API_SPEC.md
+start.cmd
 
 # Claude Code local settings
 .claude/

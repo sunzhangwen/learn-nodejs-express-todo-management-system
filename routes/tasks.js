@@ -2,6 +2,7 @@ const express = require('express')
 const { Task } = require('../models')
 const { authMiddleware } = require('../middleware/auth')
 const { success, error } = require('../utils/response')
+const { generateUniqueId } = require('../utils/idGenerator')
 
 const router = express.Router()
 
@@ -77,6 +78,7 @@ router.post('/', authMiddleware, async (req, res) => {
 
   try {
     const task = await Task.create({
+      id: await generateUniqueId(Task),
       title,
       category,
       startTime,
@@ -198,7 +200,7 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 
     await task.destroy()
 
-    return success(res, { id: parseInt(taskId) }, '删除成功')
+    return success(res, { id: taskId }, '删除成功')
   } catch (err) {
     console.error('删除任务失败', err)
     return error(res, '网络异常，请稍后重试', 500)

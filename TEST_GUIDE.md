@@ -27,12 +27,14 @@ FLUSH PRIVILEGES;
 
 项目使用 Sequelize ORM，启动服务时会自动创建表。也可以手动执行以下 SQL：
 
+> 注意：id 字段为字符串类型，格式为 `id_` + 10 位随机字母数字（如 `id_aB3kL9xR2m`），由应用层自动生成。
+
 ```sql
 USE js_test;
 
 -- 用户表
 CREATE TABLE IF NOT EXISTS `users` (
-  `id` INTEGER NOT NULL auto_increment,
+  `id` VARCHAR(255) NOT NULL COMMENT '用户唯一标识，格式 id_xxxxxxxxxx',
   `name` VARCHAR(255) NOT NULL COMMENT '用户名',
   `email` VARCHAR(255) NOT NULL UNIQUE COMMENT '邮箱',
   `password` VARCHAR(255) NOT NULL COMMENT '密码',
@@ -44,7 +46,7 @@ CREATE TABLE IF NOT EXISTS `users` (
 
 -- 任务表
 CREATE TABLE IF NOT EXISTS `tasks` (
-  `id` INTEGER NOT NULL auto_increment,
+  `id` VARCHAR(255) NOT NULL COMMENT '任务唯一标识，格式 id_xxxxxxxxxx',
   `title` VARCHAR(255) NOT NULL COMMENT '任务标题',
   `category` ENUM('work', 'personal', 'activity') NOT NULL COMMENT '分类',
   `startTime` VARCHAR(255) NOT NULL COMMENT '开始时间 HH:mm',
@@ -54,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `tasks` (
   `date` VARCHAR(255) NOT NULL COMMENT '日期 YYYY-MM-DD',
   `status` ENUM('pending', 'completed') NOT NULL DEFAULT 'pending' COMMENT '状态',
   `isFeatured` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否重要',
-  `userId` INTEGER NOT NULL COMMENT '用户ID',
+  `userId` VARCHAR(255) NOT NULL COMMENT '用户ID',
   `createdAt` DATETIME NOT NULL,
   `updatedAt` DATETIME NOT NULL,
   PRIMARY KEY (`id`),
@@ -64,21 +66,23 @@ CREATE TABLE IF NOT EXISTS `tasks` (
 
 ### 1.4 插入测试数据
 
+> 注意：id 字段需使用 `id_` 格式的字符串，密码为 `123456` 经 bcrypt 加密后的值。
+
 ```sql
 USE js_test;
 
--- 插入测试用户（密码: 123456，bcrypt 加密后的值）
-INSERT INTO `users` (`name`, `email`, `password`, `createdAt`, `updatedAt`) VALUES
-('张三', 'zhangsan@example.com', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01', NOW(), NOW()),
-('李四', 'lisi@example.com', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01', NOW(), NOW());
+-- 插入测试用户
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `createdAt`, `updatedAt`) VALUES
+('id_testuser01', '张三', 'zhangsan@example.com', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01', NOW(), NOW()),
+('id_testuser02', '李四', 'lisi@example.com', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ01', NOW(), NOW());
 
 -- 插入测试任务
-INSERT INTO `tasks` (`title`, `category`, `startTime`, `endTime`, `location`, `note`, `date`, `status`, `isFeatured`, `userId`, `createdAt`, `updatedAt`) VALUES
-('公司年终复盘会议', 'work', '08:00', '10:00', '会议室A', '准备PPT', '2026-06-18', 'pending', 1, 1, NOW(), NOW()),
-('项目进度汇报', 'work', '14:00', '15:00', '会议室B', '整理本周工作', '2026-06-18', 'pending', 0, 1, NOW(), NOW()),
-('健身锻炼', 'personal', '18:00', '19:00', '健身房', '跑步30分钟', '2026-06-18', 'completed', 0, 1, NOW(), NOW()),
-('团队聚餐', 'activity', '19:00', '21:00', '火锅店', '庆祝项目上线', '2026-06-19', 'pending', 1, 1, NOW(), NOW()),
-('代码审查', 'work', '10:00', '11:00', NULL, '审查PR #42', '2026-06-18', 'pending', 0, 2, NOW(), NOW());
+INSERT INTO `tasks` (`id`, `title`, `category`, `startTime`, `endTime`, `location`, `note`, `date`, `status`, `isFeatured`, `userId`, `createdAt`, `updatedAt`) VALUES
+('id_testtask01', '公司年终复盘会议', 'work', '08:00', '10:00', '会议室A', '准备PPT', '2026-06-18', 'pending', 1, 'id_testuser01', NOW(), NOW()),
+('id_testtask02', '项目进度汇报', 'work', '14:00', '15:00', '会议室B', '整理本周工作', '2026-06-18', 'pending', 0, 'id_testuser01', NOW(), NOW()),
+('id_testtask03', '健身锻炼', 'personal', '18:00', '19:00', '健身房', '跑步30分钟', '2026-06-18', 'completed', 0, 'id_testuser01', NOW(), NOW()),
+('id_testtask04', '团队聚餐', 'activity', '19:00', '21:00', '火锅店', '庆祝项目上线', '2026-06-19', 'pending', 1, 'id_testuser01', NOW(), NOW()),
+('id_testtask05', '代码审查', 'work', '10:00', '11:00', NULL, '审查PR #42', '2026-06-18', 'pending', 0, 'id_testuser02', NOW(), NOW());
 ```
 
 ---
@@ -163,7 +167,7 @@ curl -X POST http://localhost:3000/api/auth/login \
   "data": {
     "token": "eyJhbGciOiJIUzI1NiIs...",
     "user": {
-      "id": 1,
+      "id": "id_aB3kL9xR2m",
       "name": "测试用户",
       "email": "test@example.com",
       "avatar": null,
@@ -182,6 +186,8 @@ curl -X POST http://localhost:3000/api/auth/login \
   "message": "登录成功"
 }
 ```
+
+> 注意：id 字段为字符串格式 `id_` + 10 位随机字母数字，每次注册自动生成。
 
 ---
 
@@ -214,7 +220,7 @@ curl http://localhost:3000/api/user/profile \
 {
   "success": true,
   "data": {
-    "id": 1,
+    "id": "id_aB3kL9xR2m",
     "name": "测试用户",
     "email": "test@example.com",
     "avatar": null,
@@ -279,11 +285,11 @@ curl "http://localhost:3000/api/tasks?date=2026-06-18" \
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| id | integer | 任务 ID |
+| id | string | 任务 ID，格式 `id_xxxxxxxxxx` |
 
 **curl 测试**:
 ```bash
-curl http://localhost:3000/api/tasks/1 \
+curl http://localhost:3000/api/tasks/id_aB3kL9xR2m \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
 ```
 
@@ -322,13 +328,13 @@ curl -X POST http://localhost:3000/api/tasks \
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| id | integer | 任务 ID |
+| id | string | 任务 ID，格式 `id_xxxxxxxxxx` |
 
 **请求参数**: 同创建任务（全量更新）
 
 **curl 测试**:
 ```bash
-curl -X PUT http://localhost:3000/api/tasks/1 \
+curl -X PUT http://localhost:3000/api/tasks/id_aB3kL9xR2m \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{"title":"更新后的任务","category":"personal","startTime":"14:00","endTime":"15:00","location":"家里","note":"更新备注","date":"2026-06-19","status":"completed","isFeatured":true}'
@@ -342,7 +348,7 @@ curl -X PUT http://localhost:3000/api/tasks/1 \
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| id | integer | 任务 ID |
+| id | string | 任务 ID，格式 `id_xxxxxxxxxx` |
 
 **请求参数**:
 ```json
@@ -353,7 +359,7 @@ curl -X PUT http://localhost:3000/api/tasks/1 \
 
 **curl 测试**:
 ```bash
-curl -X PATCH http://localhost:3000/api/tasks/1/status \
+curl -X PATCH http://localhost:3000/api/tasks/id_aB3kL9xR2m/status \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{"status":"completed"}'
@@ -367,11 +373,11 @@ curl -X PATCH http://localhost:3000/api/tasks/1/status \
 
 | 参数 | 类型 | 说明 |
 |------|------|------|
-| id | integer | 任务 ID |
+| id | string | 任务 ID，格式 `id_xxxxxxxxxx` |
 
 **curl 测试**:
 ```bash
-curl -X DELETE http://localhost:3000/api/tasks/1 \
+curl -X DELETE http://localhost:3000/api/tasks/id_aB3kL9xR2m \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
 ```
 
@@ -380,7 +386,7 @@ curl -X DELETE http://localhost:3000/api/tasks/1 \
 {
   "success": true,
   "data": {
-    "id": 1
+    "id": "id_aB3kL9xR2m"
   },
   "message": "删除成功"
 }
@@ -396,7 +402,7 @@ curl -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{"name":"测试用户","email":"test@example.com","password":"123456"}'
 
-# 2. 登录获取 token
+# 2. 登录获取 token（从响应中提取 token 和 user.id）
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"123456"}'
@@ -417,14 +423,14 @@ curl -X POST http://localhost:3000/api/tasks \
 curl "http://localhost:3000/api/tasks?date=2026-06-18" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
 
-# 7. 更新任务状态
-curl -X PATCH http://localhost:3000/api/tasks/1/status \
+# 7. 更新任务状态（替换 TASK_ID 为实际返回的 id）
+curl -X PATCH http://localhost:3000/api/tasks/TASK_ID/status \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN_HERE" \
   -d '{"status":"completed"}'
 
 # 8. 删除任务
-curl -X DELETE http://localhost:3000/api/tasks/1 \
+curl -X DELETE http://localhost:3000/api/tasks/TASK_ID \
   -H "Authorization: Bearer YOUR_TOKEN_HERE"
 
 # 9. 登出
@@ -469,10 +475,33 @@ curl -X POST http://localhost:3000/api/auth/logout \
 
 ---
 
-## 6. 运行自动化测试
+## 6. ID 格式说明
+
+所有实体 ID 采用统一的字符串格式：
+
+```
+id_ + 10位随机字母数字
+```
+
+示例：`id_aB3kL9xR2m`、`id_Tm4nQ7wZ3p`
+
+- 由应用层自动生成，无需手动传入
+- 注册用户时自动生成用户 ID
+- 创建任务时自动生成任务 ID
+- 格式正则：`/^id_[a-zA-Z0-9]{10}$/`
+
+---
+
+## 7. 时区说明
+
+统计接口（`GET /user/profile`、`POST /auth/login`）中的 `todayPending` 字段基于**服务器本地时区**计算当日日期，确保与前端 `getToday()` 返回值一致。
+
+---
+
+## 8. 运行自动化测试
 
 ```bash
 npm test
 ```
 
-测试文件位于 `__tests__/api.test.js`，包含所有接口的自动化测试用例。
+测试文件位于 `__tests__/api.test.js`，包含所有接口的自动化测试用例。测试会自动同步数据库结构（`force: true`），无需手动建表。

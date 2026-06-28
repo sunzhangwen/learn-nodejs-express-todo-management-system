@@ -25,6 +25,8 @@ describe('认证接口', () => {
     expect(res.body.data.user.email).toBe('test@example.com')
     expect(res.body.data.user.password).toBeUndefined()
     expect(res.body.data.token).toBeDefined()
+    expect(typeof res.body.data.user.id).toBe('string')
+    expect(res.body.data.user.id).toMatch(/^id_[a-zA-Z0-9]{10}$/)
   })
 
   test('POST /api/auth/register - 邮箱重复', async () => {
@@ -158,6 +160,8 @@ describe('任务接口', () => {
     expect(res.body.data.startTime).toBe('09:00')
     expect(res.body.data.date).toBe('2026-06-18')
     expect(res.body.data.status).toBe('pending')
+    expect(typeof res.body.data.id).toBe('string')
+    expect(res.body.data.id).toMatch(/^id_[a-zA-Z0-9]{10}$/)
     taskId = res.body.data.id
   })
 
@@ -244,6 +248,7 @@ describe('任务接口', () => {
 
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
+    expect(typeof res.body.data.id).toBe('string')
     expect(res.body.data.id).toBe(taskId)
   })
 

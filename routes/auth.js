@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken')
 const { JWT_SECRET } = require('../config/config')
 const { authMiddleware } = require('../middleware/auth')
 const { success, error } = require('../utils/response')
+const { generateUniqueId } = require('../utils/idGenerator')
 
 const router = express.Router()
 
@@ -23,8 +24,9 @@ router.post('/login', async (req, res) => {
 
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' })
 
-    // 获取用户统计数据
-    const today = new Date().toISOString().split('T')[0]
+    // 获取用户统计数据（使用本地时区日期）
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const [todayPending, totalPublished, totalCompleted] = await Promise.all([
       Task.count({ where: { userId: user.id, date: today, status: 'pending' } }),
       Task.count({ where: { userId: user.id } }),
@@ -81,6 +83,7 @@ router.post('/register', async (req, res) => {
     }
 
     const newUser = await User.create({
+      id: await generateUniqueId(User),
       name,
       email,
       password: await User.hashPassword(password)

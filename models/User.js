@@ -22,6 +22,12 @@ class User extends Model {
 
 User.init(
   {
+    id: {
+      type: DataTypes.STRING,
+      primaryKey: true,
+      allowNull: false,
+      comment: '用户唯一标识，格式 id_xxxxxxxxxx'
+    },
     name: {
       type: DataTypes.STRING,
       allowNull: false,

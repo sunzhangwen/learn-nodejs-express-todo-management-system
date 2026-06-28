@@ -12,6 +12,7 @@
 - 任务状态管理（pending/completed）
 - 用户信息及统计数据
 - 统一响应格式
+- 字符串格式 ID（`id_` + 10 位随机字母数字）
 
 ## 2. 技术栈
 
@@ -41,8 +42,8 @@
 │   └── config.js            # 环境变量集中管理
 ├── models/
 │   ├── index.js             # 模型关联与同步入口
-│   ├── Task.js              # 任务模型定义
-│   └── User.js              # 用户模型定义（bcrypt 密码哈希）
+│   ├── Task.js              # 任务模型定义（STRING 主键）
+│   └── User.js              # 用户模型定义（STRING 主键 + bcrypt）
 ├── routes/
 │   ├── auth.js              # 认证路由（登录、注册、登出）
 │   ├── tasks.js             # 任务管理路由（JWT 保护 + 权限校验）
@@ -50,7 +51,8 @@
 ├── middleware/
 │   └── auth.js              # JWT 鉴权中间件
 ├── utils/
-│   └── response.js          # 统一响应格式工具
+│   ├── response.js          # 统一响应格式工具
+│   └── idGenerator.js       # ID 生成工具（id_ + 10位随机字符）
 ├── __tests__/
 │   └── api.test.js          # API 接口测试
 ├── app.js                   # Express 应用实例（独立导出，供测试引用）
@@ -156,11 +158,25 @@ npm run dev
 
 ## 6. 数据模型
 
+### ID 格式
+
+所有实体 ID 采用统一的字符串格式：
+
+```
+id_ + 10位随机字母数字
+```
+
+示例：`id_aB3kL9xR2m`、`id_Tm4nQ7wZ3p`
+
+- 由应用层自动生成，无需手动传入
+- 格式正则：`/^id_[a-zA-Z0-9]{10}$/`
+- 创建时自动查重，确保唯一性
+
 ### User（用户）
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | integer | 主键，自增 |
+| id | string | 主键，格式 `id_xxxxxxxxxx` |
 | name | string | 用户名 |
 | email | string | 邮箱（唯一） |
 | password | string | 密码（bcrypt 加密） |
@@ -170,7 +186,7 @@ npm run dev
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| id | integer | 主键，自增 |
+| id | string | 主键，格式 `id_xxxxxxxxxx` |
 | title | string | 任务标题 |
 | category | enum | 分类：work/personal/activity |
 | startTime | string | 开始时间 HH:mm |
@@ -180,7 +196,7 @@ npm run dev
 | date | string | 日期 YYYY-MM-DD |
 | status | enum | 状态：pending/completed |
 | isFeatured | boolean | 是否重要 |
-| userId | integer | 用户 ID（外键） |
+| userId | string | 用户 ID（外键） |
 
 ## 7. 安全机制
 
@@ -192,6 +208,7 @@ npm run dev
 | CORS | 通过 `CORS_ORIGIN` 环境变量控制允许的源 |
 | 任务权限 | 创建任务从 token 取 userId，更新/删除验证任务归属 |
 | 敏感配置 | `database.js` 和 `.env` 已加入 `.gitignore` |
+| ID 安全 | 随机字符串 ID，无法被预测或枚举 |
 
 ## 8. 测试
 
@@ -209,6 +226,7 @@ npm test
 - 日期筛选
 - 状态更新
 - 权限校验
+- ID 格式验证（正则 `/^id_[a-zA-Z0-9]{10}$/`）
 
 ### 手动测试
 
@@ -222,3 +240,4 @@ npm test
 - 首次使用请复制 `config/database.example.js` 为 `config/database.js` 并填入真实配置
 - 生产环境务必设置 `JWT_SECRET` 环境变量
 - 生产环境建议将 `CORS_ORIGIN` 设置为具体的前端域名
+- 主键类型从 INTEGER 改为 STRING 后，需重建数据库表（`sequelize.sync({ force: true })` 或手动 DROP 旧表）

@@ -15,8 +15,9 @@ router.get('/profile', authMiddleware, async (req, res) => {
       return error(res, '用户不存在', 404)
     }
 
-    // 获取用户统计数据
-    const today = new Date().toISOString().split('T')[0]
+    // 获取用户统计数据（使用本地时区日期）
+    const now = new Date()
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
     const [todayPending, totalPublished, totalCompleted] = await Promise.all([
       Task.count({ where: { userId, date: today, status: 'pending' } }),
       Task.count({ where: { userId } }),
