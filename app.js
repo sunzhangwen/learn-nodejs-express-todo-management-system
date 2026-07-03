@@ -3,6 +3,7 @@ const cors = require('cors')
 const authRouter = require('./routes/auth.js')
 const taskRouter = require('./routes/tasks.js')
 const userRouter = require('./routes/users.js')
+const aiRouter = require('./routes/ai.js')
 const { CORS_ORIGIN } = require('./config/config')
 
 const app = express()
@@ -19,5 +20,6 @@ app.use(cors(corsOptions))
 app.use('/api/auth', authRouter)
 app.use('/api/tasks', taskRouter)
 app.use('/api/user', userRouter)
+app.use('/api/ai', aiRouter)
 
 module.exports = app

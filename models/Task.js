@@ -9,59 +9,86 @@ Task.init(
       type: DataTypes.STRING,
       primaryKey: true,
       allowNull: false,
-      comment: '任务唯一标识，格式 id_xxxxxxxxxx'
+      comment: 'Task id in id_xxxxxxxxxx format'
     },
     title: {
       type: DataTypes.STRING,
       allowNull: false,
-      comment: '任务标题'
+      comment: 'Task title'
     },
     category: {
       type: DataTypes.ENUM('work', 'personal', 'activity'),
       allowNull: false,
-      comment: '分类：work/personal/activity'
+      comment: 'Task category'
+    },
+    priority: {
+      type: DataTypes.ENUM('low', 'medium', 'high'),
+      allowNull: false,
+      defaultValue: 'medium',
+      comment: 'Task priority'
     },
     startTime: {
       type: DataTypes.STRING,
       allowNull: false,
-      comment: '开始时间 HH:mm'
+      comment: 'Start time, HH:mm'
     },
     endTime: {
       type: DataTypes.STRING,
       allowNull: true,
-      comment: '结束时间 HH:mm'
+      comment: 'End time, HH:mm'
     },
     location: {
       type: DataTypes.STRING,
       allowNull: true,
-      comment: '地点'
+      comment: 'Display location'
+    },
+    address: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Resolved address'
+    },
+    latitude: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      comment: 'Latitude'
+    },
+    longitude: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      comment: 'Longitude'
+    },
+    attachments: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: [],
+      comment: 'Attachment URI list'
     },
     note: {
       type: DataTypes.TEXT,
       allowNull: true,
-      comment: '备注'
+      comment: 'Task note'
     },
     date: {
       type: DataTypes.STRING,
       allowNull: false,
-      comment: '日期 YYYY-MM-DD'
+      comment: 'Date, YYYY-MM-DD'
     },
     status: {
       type: DataTypes.ENUM('pending', 'completed'),
       allowNull: false,
       defaultValue: 'pending',
-      comment: '状态：pending/completed'
+      comment: 'Task status'
     },
     isFeatured: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
       defaultValue: false,
-      comment: '是否重要/置顶'
+      comment: 'Whether the task is important or pinned'
     },
     userId: {
       type: DataTypes.STRING,
       allowNull: false,
-      comment: '任务所属用户 ID'
+      comment: 'Owner user id'
     }
   },
   {

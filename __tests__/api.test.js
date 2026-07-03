@@ -1,6 +1,8 @@
 const request = require('supertest')
 const app = require('../app')
 const { sequelize, User, Task } = require('../models')
+const jwt = require('jsonwebtoken')
+const { JWT_SECRET } = require('../config/config')
 
 // 测试前同步数据库（使用 force: true 清空数据）
 beforeAll(async () => {
@@ -78,6 +80,162 @@ describe('认证接口', () => {
     expect(res.status).toBe(200)
     expect(res.body.success).toBe(true)
     expect(res.body.message).toBe('已退出登录')
+  })
+})
+
+describe('AI and native metadata endpoints', () => {
+  let token
+  let secondToken
+  let taskId
+
+  beforeAll(async () => {
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ email: 'test@example.com', password: '123456' })
+    token = loginRes.body.data.token
+
+    const secondUser = await request(app)
+      .post('/api/auth/register')
+      .send({ name: 'otheruser', email: 'other@example.com', password: '123456' })
+    secondToken = secondUser.body.data.token
+  })
+
+  test('POST /api/tasks stores priority, coordinates, address, and attachments', async () => {
+    const res = await request(app)
+      .post('/api/tasks')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Prepare RN camera demo',
+        category: 'work',
+        priority: 'high',
+        startTime: '09:00',
+        endTime: '10:00',
+        location: 'Expo lab',
+        address: 'Expo lab, Hangzhou',
+        latitude: 30.2741,
+        longitude: 120.1551,
+        attachments: ['file:///photo-a.jpg', 'file:///photo-b.jpg'],
+        note: 'Bring Android device',
+        date: '2026-07-04',
+        status: 'pending',
+        isFeatured: true
+      })
+
+    expect(res.status).toBe(201)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.priority).toBe('high')
+    expect(res.body.data.latitude).toBeCloseTo(30.2741)
+    expect(res.body.data.longitude).toBeCloseTo(120.1551)
+    expect(res.body.data.address).toBe('Expo lab, Hangzhou')
+    expect(res.body.data.attachments).toEqual(['file:///photo-a.jpg', 'file:///photo-b.jpg'])
+    taskId = res.body.data.id
+  })
+
+  test('POST /api/ai/classify requires auth', async () => {
+    const res = await request(app)
+      .post('/api/ai/classify')
+      .send({ title: 'Complete React Native assignment' })
+
+    expect(res.status).toBe(401)
+  })
+
+  test('POST /api/ai/classify returns structured task suggestions', async () => {
+    const res = await request(app)
+      .post('/api/ai/classify')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Complete React Native assignment', note: 'Due tomorrow' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(['work', 'personal', 'activity']).toContain(res.body.data.category)
+    expect(['low', 'medium', 'high']).toContain(res.body.data.priority)
+    expect(typeof res.body.data.isFeatured).toBe('boolean')
+    expect(typeof res.body.data.reason).toBe('string')
+  })
+
+  test('POST /api/ai/parse-task turns natural language into a task draft', async () => {
+    const res = await request(app)
+      .post('/api/ai/parse-task')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ text: 'Tomorrow at 15:00 remind me to submit the React Native homework' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.title).toBeTruthy()
+    expect(['work', 'personal', 'activity']).toContain(res.body.data.category)
+    expect(['low', 'medium', 'high']).toContain(res.body.data.priority)
+    expect(res.body.data.startTime).toMatch(/^\d{2}:\d{2}$/)
+  })
+
+  test('POST /api/ai/summarize summarizes only an owned task', async () => {
+    const ok = await request(app)
+      .post('/api/ai/summarize')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ taskId })
+
+    expect(ok.status).toBe(200)
+    expect(ok.body.success).toBe(true)
+    expect(ok.body.data.summary).toContain('Prepare RN camera demo')
+
+    const forbidden = await request(app)
+      .post('/api/ai/summarize')
+      .set('Authorization', `Bearer ${secondToken}`)
+      .send({ taskId })
+
+    expect(forbidden.status).toBe(404)
+  })
+
+  test('POST /api/ai/chat answers from the current user task context with sources', async () => {
+    const res = await request(app)
+      .post('/api/ai/chat')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ question: 'What camera demo tasks do I have?' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.answer).toContain('Prepare RN camera demo')
+    expect(res.body.data.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: taskId, title: 'Prepare RN camera demo' })
+      ])
+    )
+  })
+
+  test('POST /api/ai/chat explains when no relevant current user tasks are found', async () => {
+    const res = await request(app)
+      .post('/api/ai/chat')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ question: 'zzzz unmatched question' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.answer).toContain('没有')
+    expect(res.body.data.sources).toEqual([])
+  })
+})
+
+describe('stale token handling', () => {
+  test('POST /api/tasks rejects a valid token when the user no longer exists', async () => {
+    const staleToken = jwt.sign(
+      { id: 'id_missingUser', email: 'missing@example.com' },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    )
+
+    const res = await request(app)
+      .post('/api/tasks')
+      .set('Authorization', `Bearer ${staleToken}`)
+      .send({
+        title: 'Should not insert',
+        category: 'work',
+        startTime: '09:00',
+        date: '2026-07-03',
+        status: 'pending',
+        isFeatured: false
+      })
+
+    expect(res.status).toBe(401)
+    expect(res.body.success).toBe(false)
   })
 })
 
