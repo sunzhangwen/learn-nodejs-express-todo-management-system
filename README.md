@@ -1,131 +1,162 @@
-# Node.js Express 日程 Todo 后端系统
+# 日程助手后端系统
 
-基于 Node.js + Express + Sequelize + MySQL 的日程管理后端 API，支持用户认证和任务管理。
+基于 Node.js + Express + Sequelize + MySQL 的日程 Todo 后端服务，提供用户认证、任务管理、用户统计、AI 辅助和可选 RAG 向量检索能力。
 
-## 1. 项目简介
+## 交付状态
 
-本项目是一个日程 Todo 管理系统的后端服务，提供完整的 RESTful API，支持：
+当前后端已覆盖前端联调与接口验收所需能力：
 
-- 用户注册、登录、登出（bcrypt 密码哈希 + JWT 认证）
-- 任务 CRUD 操作（创建、查询、更新、删除）
-- 按日期筛选任务
-- 任务状态管理（pending/completed）
-- 用户信息及统计数据
-- 统一响应格式
-- 字符串格式 ID（`id_` + 10 位随机字母数字）
+- 用户注册、登录、登出
+- JWT 鉴权与任务归属校验
+- 任务 CRUD、日期筛选、状态切换
+- 任务优先级、重点任务、地点、地址、经纬度、附件字段
+- 用户统计：今日待办、发布总数、已完成总数、分类统计
+- AI 接口：分类建议、自然语言解析任务、任务总结、日程问答
+- OpenAI 不可用时使用本地规则兜底，避免核心流程直接失败
+- RAG 向量检索默认关闭，显式开启后可对接 Qdrant
+- Jest + Supertest 自动化测试
 
-## 2. 技术栈
+## 技术栈
 
 | 依赖 | 版本 | 用途 |
-|------|------|------|
+| --- | --- | --- |
 | express | ^5.2.1 | Web 框架 |
 | sequelize | ^6.37.8 | ORM |
 | mysql2 | ^3.22.4 | MySQL 驱动 |
-| cors | ^2.8.6 | 跨域配置 |
 | jsonwebtoken | ^9.0.2 | JWT 认证 |
 | bcrypt | ^6.0.0 | 密码哈希 |
-| dotenv | ^16.x | 环境变量加载 |
+| cors | ^2.8.6 | 跨域 |
+| dotenv | ^17.4.2 | 环境变量 |
+| jest | ^30.4.2 | 自动化测试 |
+| supertest | ^7.2.2 | HTTP 接口测试 |
 
-开发依赖：
+## 目录结构
 
-| 依赖 | 用途 |
-|------|------|
-| jest | 测试框架 |
-| supertest | HTTP 接口测试 |
+```text
+config/
+├── config.js               # JWT、端口、CORS、运行环境
+└── database.js             # Sequelize 数据库连接配置
 
-## 3. 项目目录结构
+models/
+├── index.js                # 模型关联与同步入口
+├── User.js                 # 用户模型
+└── Task.js                 # 任务模型
 
-```
-├── config/
-│   ├── database.js          # Sequelize MySQL 连接配置（已 gitignore）
-│   ├── database.example.js  # 数据库配置模板
-│   └── config.js            # 环境变量集中管理
-├── models/
-│   ├── index.js             # 模型关联与同步入口
-│   ├── Task.js              # 任务模型定义（STRING 主键）
-│   └── User.js              # 用户模型定义（STRING 主键 + bcrypt）
-├── routes/
-│   ├── auth.js              # 认证路由（登录、注册、登出）
-│   ├── tasks.js             # 任务管理路由（JWT 保护 + 权限校验）
-│   └── users.js             # 用户信息路由
-├── middleware/
-│   └── auth.js              # JWT 鉴权中间件
-├── utils/
-│   ├── response.js          # 统一响应格式工具
-│   └── idGenerator.js       # ID 生成工具（id_ + 10位随机字符）
-├── __tests__/
-│   └── api.test.js          # API 接口测试
-├── app.js                   # Express 应用实例（独立导出，供测试引用）
-├── main_index.js            # 服务启动入口
-├── TEST_GUIDE.md            # 接口测试指南（含 SQL 和 curl 示例）
-├── .env.example             # 环境变量模板
-├── .gitignore
-├── package.json
-└── README.md
+routes/
+├── auth.js                 # 注册、登录、登出
+├── tasks.js                # 任务 CRUD
+├── users.js                # 用户信息与统计
+└── ai.js                   # AI 分类、解析、总结、问答
+
+utils/
+├── ai.js                   # AI 兜底、RAG、embedding、关键词搜索
+├── vectorDB.js             # Qdrant 向量库封装
+├── response.js             # 统一响应格式
+└── idGenerator.js          # id_xxxxxxxxxx 字符串 ID 生成
+
+__tests__/
+├── api.test.js             # API 主流程测试
+├── database-config.test.js # 数据库环境变量测试
+└── rag.test.js             # RAG 与关键词搜索测试
 ```
 
-## 4. 安装与启动
+## 环境配置
 
-### 4.1 安装依赖
+复制环境变量模板：
 
 ```bash
-npm install
-```
-
-### 4.2 配置环境变量
-
-复制配置模板并按实际情况修改：
-
-```bash
-# 数据库配置
-cp config/database.example.js config/database.js
-
-# 环境变量
 cp .env.example .env
 ```
 
-`.env` 文件说明：
+`.env` 核心配置：
 
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| JWT_SECRET | 生产环境必填 | JWT 签名密钥 |
-| PORT | 否 | 服务端口，默认 3000 |
-| CORS_ORIGIN | 否 | 允许的跨域源，逗号分隔，默认 `*` |
-| NODE_ENV | 否 | 运行环境，默认 `development` |
-| OPENAI_API_KEY | 否 | 启用 AI 分类、解析和 RAG embedding 时使用 |
-| AI_RAG_ENABLED | 否 | 设为 `true` 才启用 RAG 向量检索；默认关闭并使用关键词搜索 |
-| OPENAI_TIMEOUT_MS | 否 | OpenAI 请求超时时间，默认 `10000` 毫秒 |
-| QDRANT_URL | 否 | Qdrant 地址；配置后可用于 RAG 向量检索 |
-| QDRANT_API_KEY | 否 | Qdrant API Key |
-| QDRANT_COLLECTION | 否 | Qdrant collection 名称，默认 `tasks` |
+| 变量 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `DB_HOST` | 否 | `localhost` | MySQL 地址 |
+| `DB_NAME` | 是 | 无 | 数据库名称 |
+| `DB_USER` | 是 | 无 | 数据库用户 |
+| `DB_PASS` | 否 | 空字符串 | 数据库密码 |
+| `DB_DIALECT` | 否 | `mysql` | Sequelize 方言 |
+| `JWT_SECRET` | 生产必填 | `dev_secret_change_me` | JWT 签名密钥 |
+| `PORT` | 否 | `3000` | 服务端口 |
+| `CORS_ORIGIN` | 否 | `*` | 跨域来源，多个来源用英文逗号分隔 |
+| `NODE_ENV` | 否 | `development` | 运行环境 |
+| `OPENAI_API_KEY` | 否 | 空 | OpenAI API Key；为空时使用本地兜底 |
+| `AI_MODEL` | 否 | `gpt-4o-mini` | Chat Completions 模型 |
+| `OPENAI_TIMEOUT_MS` | 否 | `10000` | OpenAI 请求超时时间 |
+| `EMBEDDING_MODEL` | 否 | `text-embedding-3-small` | embedding 模型 |
+| `AI_RAG_ENABLED` | 否 | 关闭 | 只有设为 `true` 才启用 RAG 向量检索 |
+| `QDRANT_URL` | RAG 开启时需要 | 空 | Qdrant 服务地址 |
+| `QDRANT_API_KEY` | 否 | 空 | Qdrant API Key |
+| `QDRANT_COLLECTION` | 否 | `tasks` | Qdrant collection 名称 |
+| `QDRANT_DISTANCE` | 否 | `Cosine` | 向量距离算法 |
 
-### 4.3 准备数据库
+建议本地开发默认保持：
 
-确保 MySQL 已运行，并创建数据库：
+```env
+AI_RAG_ENABLED=false
+OPENAI_API_KEY=
+```
+
+这样 AI 与聊天接口会走本地规则和关键词搜索，不依赖外网。
+
+## 安装与启动
+
+```bash
+npm install
+npm start
+```
+
+开发模式：
+
+```bash
+npm run dev
+```
+
+> `dev` 脚本依赖 `nodemon`，如果本地未安装可使用 `npm start`。
+
+服务默认地址：
+
+```text
+http://localhost:3000
+```
+
+API 基础路径：
+
+```text
+http://localhost:3000/api
+```
+
+## 数据库
+
+创建数据库：
 
 ```sql
 CREATE DATABASE IF NOT EXISTS js_test DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-> 详细的数据库初始化和测试数据请参考 [TEST_GUIDE.md](./TEST_GUIDE.md)
+服务启动时会通过 Sequelize 同步模型。当前任务表字段包括：
 
-### 4.4 启动服务
+| 字段 | 说明 |
+| --- | --- |
+| `id` | 字符串主键，格式 `id_xxxxxxxxxx` |
+| `title` | 任务标题 |
+| `category` | `work`、`personal`、`activity` |
+| `priority` | `low`、`medium`、`high`，默认 `medium` |
+| `startTime` / `endTime` | 任务时间 |
+| `location` / `address` | 地点与地址 |
+| `latitude` / `longitude` | 经纬度 |
+| `attachments` | JSON 附件 URI 数组 |
+| `note` | 备注 |
+| `date` | 日期，格式 `YYYY-MM-DD` |
+| `status` | `pending`、`completed` |
+| `isFeatured` | 是否重点任务 |
+| `userId` | 所属用户 ID |
 
-```bash
-# 生产模式
-npm start
+## 接口概览
 
-# 开发模式（自动重启）
-npm run dev
-```
+统一响应格式：
 
-服务默认监听：`http://localhost:3000`
-
-## 5. 接口概览
-
-**基础路径**: `/api`
-
-**统一响应格式**:
 ```json
 {
   "success": true,
@@ -134,116 +165,99 @@ npm run dev
 }
 ```
 
-### 认证接口
+认证接口：
 
 | 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
+| --- | --- | --- | --- |
 | POST | `/api/auth/register` | 用户注册 | 否 |
 | POST | `/api/auth/login` | 用户登录 | 否 |
 | POST | `/api/auth/logout` | 用户登出 | 是 |
 
-### 用户接口
+用户接口：
 
 | 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| GET | `/api/user/profile` | 获取用户信息（含统计） | 是 |
+| --- | --- | --- | --- |
+| GET | `/api/user/profile` | 用户信息、统计、分类计数 | 是 |
 
-### 任务接口
+任务接口：
 
 | 方法 | 路径 | 说明 | 认证 |
-|------|------|------|------|
-| GET | `/api/tasks` | 获取所有任务 | 是 |
-| GET | `/api/tasks?date=YYYY-MM-DD` | 按日期获取任务 | 是 |
-| GET | `/api/tasks/:id` | 获取单个任务 | 是 |
+| --- | --- | --- | --- |
+| GET | `/api/tasks` | 查询当前用户所有任务 | 是 |
+| GET | `/api/tasks?date=YYYY-MM-DD` | 按日期查询任务 | 是 |
+| GET | `/api/tasks/:id` | 查询任务详情 | 是 |
 | POST | `/api/tasks` | 创建任务 | 是 |
 | PUT | `/api/tasks/:id` | 更新任务 | 是 |
 | PATCH | `/api/tasks/:id/status` | 更新任务状态 | 是 |
 | DELETE | `/api/tasks/:id` | 删除任务 | 是 |
 
-> 详细的接口参数和测试示例请参考 [TEST_GUIDE.md](./TEST_GUIDE.md)
+AI 接口：
 
-## 6. 数据模型
+| 方法 | 路径 | 说明 | 认证 |
+| --- | --- | --- | --- |
+| POST | `/api/ai/classify` | 根据标题/备注推荐分类、优先级、重点状态 | 是 |
+| POST | `/api/ai/parse-task` | 将自然语言解析为任务草稿 | 是 |
+| POST | `/api/ai/summarize` | 按任务 ID 或日期生成摘要 | 是 |
+| POST | `/api/ai/chat` | 对当前用户任务做问答 | 是 |
 
-### ID 格式
+详细 curl 示例见 [TEST_GUIDE.md](./TEST_GUIDE.md)。
 
-所有实体 ID 采用统一的字符串格式：
+## AI 与 RAG 说明
 
+AI 能力分两层：
+
+- 基础 AI：分类、自然语言解析、总结、聊天。未配置 `OPENAI_API_KEY` 或 OpenAI 网络不可达时，会使用本地规则兜底。
+- RAG 向量检索：默认关闭。只有 `AI_RAG_ENABLED=true` 且 Qdrant 配置有效时，任务创建/更新/删除才会同步向量，聊天才会优先走向量检索。
+
+推荐交付演示配置：
+
+```env
+AI_RAG_ENABLED=false
+OPENAI_API_KEY=
 ```
-id_ + 10位随机字母数字
+
+需要验证 RAG 时再配置：
+
+```env
+OPENAI_API_KEY=sk-...
+AI_RAG_ENABLED=true
+QDRANT_URL=https://your-qdrant-endpoint
+QDRANT_API_KEY=your_qdrant_key
 ```
 
-示例：`id_aB3kL9xR2m`、`id_Tm4nQ7wZ3p`
+## 安全与规范
 
-- 由应用层自动生成，无需手动传入
-- 格式正则：`/^id_[a-zA-Z0-9]{10}$/`
-- 创建时自动查重，确保唯一性
+- 密码使用 bcrypt 加盐哈希存储。
+- 认证使用 JWT，token 有效期 7 天。
+- 任务接口均校验当前用户归属，避免越权访问。
+- 生产环境必须设置强 `JWT_SECRET`。
+- 生产环境建议将 `CORS_ORIGIN` 设置为明确前端域名。
+- `.env`、真实数据库凭据、OpenAI Key、Qdrant Key 不应提交。
 
-### User（用户）
+## 测试
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | string | 主键，格式 `id_xxxxxxxxxx` |
-| name | string | 用户名 |
-| email | string | 邮箱（唯一） |
-| password | string | 密码（bcrypt 加密） |
-| avatar | string/null | 头像 URL |
-
-### Task（任务）
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | string | 主键，格式 `id_xxxxxxxxxx` |
-| title | string | 任务标题 |
-| category | enum | 分类：work/personal/activity |
-| startTime | string | 开始时间 HH:mm |
-| endTime | string | 结束时间 HH:mm |
-| location | string | 地点 |
-| note | string | 备注 |
-| date | string | 日期 YYYY-MM-DD |
-| status | enum | 状态：pending/completed |
-| isFeatured | boolean | 是否重要 |
-| userId | string | 用户 ID（外键） |
-
-## 7. 安全机制
-
-| 机制 | 说明 |
-|------|------|
-| 密码存储 | 使用 bcrypt 加盐哈希（10 轮） |
-| JWT 认证 | 登录签发 7 天有效期 token |
-| JWT 密钥 | 从环境变量 `JWT_SECRET` 读取，生产环境强制要求设置 |
-| CORS | 通过 `CORS_ORIGIN` 环境变量控制允许的源 |
-| 任务权限 | 创建任务从 token 取 userId，更新/删除验证任务归属 |
-| 敏感配置 | `database.js` 和 `.env` 已加入 `.gitignore` |
-| ID 安全 | 随机字符串 ID，无法被预测或枚举 |
-
-## 8. 测试
-
-### 运行自动化测试
+运行自动化测试：
 
 ```bash
 npm test
 ```
 
-测试覆盖：
+当前测试覆盖：
 
-- 认证接口（注册、登录、登出）
-- 用户信息接口
-- 任务 CRUD（创建、列表、查询、更新、删除）
-- 日期筛选
-- 状态更新
-- 权限校验
-- ID 格式验证（正则 `/^id_[a-zA-Z0-9]{10}$/`）
+- 注册、登录、登出
+- 用户信息与统计
+- 任务 CRUD、日期筛选、状态更新、权限校验
+- AI 分类、解析、总结、聊天接口
+- 数据库环境变量读取
+- RAG embedding 文本、payload、Qdrant point ID、RAG 关闭回退
 
-### 手动测试
+手动接口测试流程见 [TEST_GUIDE.md](./TEST_GUIDE.md)。
 
-详细的接口测试指南（含数据库初始化 SQL 和 curl 示例）请参考：
+## 交付检查清单
 
-📄 **[TEST_GUIDE.md](./TEST_GUIDE.md)**
-
-## 9. 备注
-
-- 数据库配置文件 `config/database.js` 包含真实凭据，已加入 `.gitignore` 不会提交
-- 首次使用请复制 `config/database.example.js` 为 `config/database.js` 并填入真实配置
-- 生产环境务必设置 `JWT_SECRET` 环境变量
-- 生产环境建议将 `CORS_ORIGIN` 设置为具体的前端域名
-- 主键类型从 INTEGER 改为 STRING 后，需重建数据库表（`sequelize.sync({ force: true })` 或手动 DROP 旧表）
+- `.env.example` 与 README 中的环境变量说明一致。
+- `npm test` 通过。
+- 本地数据库可连接，`DB_NAME` 与 `DB_USER` 已配置。
+- 前端真实 API 模式下 `EXPO_PUBLIC_API_BASE_URL` 指向 `http://<电脑局域网IP>:3000/api`。
+- 本地交付演示建议关闭 RAG，避免网络不可达导致响应变慢。
+- 生产部署前替换 `JWT_SECRET`，收紧 `CORS_ORIGIN`。
