@@ -1,6 +1,7 @@
 const request = require('supertest')
 
 process.env.OPENAI_API_KEY = ''
+process.env.MIMO_API_KEY = ''
 process.env.AI_RAG_ENABLED = 'false'
 
 const app = require('../app')

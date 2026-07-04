@@ -12,7 +12,7 @@
 - 任务优先级、重点任务、地点、地址、经纬度、附件字段
 - 用户统计：今日待办、发布总数、已完成总数、分类统计
 - AI 接口：分类建议、自然语言解析任务、任务总结、日程问答
-- OpenAI 不可用时使用本地规则兜底，避免核心流程直接失败
+- Mimo 不可用时使用本地规则兜底，避免核心流程直接失败
 - RAG 向量检索默认关闭，显式开启后可对接 Qdrant
 - Jest + Supertest 自动化测试
 
@@ -81,9 +81,12 @@ cp .env.example .env
 | `PORT` | 否 | `3000` | 服务端口 |
 | `CORS_ORIGIN` | 否 | `*` | 跨域来源，多个来源用英文逗号分隔 |
 | `NODE_ENV` | 否 | `development` | 运行环境 |
-| `OPENAI_API_KEY` | 否 | 空 | OpenAI API Key；为空时使用本地兜底 |
-| `AI_MODEL` | 否 | `gpt-4o-mini` | Chat Completions 模型 |
-| `OPENAI_TIMEOUT_MS` | 否 | `10000` | OpenAI 请求超时时间 |
+| `MIMO_API_KEY` | 否 | 空 | Mimo API Key；为空时使用本地兜底 |
+| `MIMO_BASE_URL` | 否 | `https://api.xiaomimimo.com/v1` | Mimo API 请求地址 |
+| `AI_MODEL` | 否 | `mimo-v2.5-pro` | Chat Completions 模型 |
+| `AI_TIMEOUT_MS` | 否 | `30000` | AI 请求超时时间；`OPENAI_TIMEOUT_MS` 仍兼容 |
+| `AI_MAX_TOKENS` | 否 | `1600` | Mimo 推理与回答的最大 token 数 |
+| `OPENAI_API_KEY` | 否 | 空 | OpenAI API Key；仅 RAG embedding 开启时使用 |
 | `EMBEDDING_MODEL` | 否 | `text-embedding-3-small` | embedding 模型 |
 | `AI_RAG_ENABLED` | 否 | 关闭 | 只有设为 `true` 才启用 RAG 向量检索 |
 | `QDRANT_URL` | RAG 开启时需要 | 空 | Qdrant 服务地址 |
@@ -95,7 +98,9 @@ cp .env.example .env
 
 ```env
 AI_RAG_ENABLED=false
-OPENAI_API_KEY=
+MIMO_API_KEY=
+AI_TIMEOUT_MS=30000
+AI_MAX_TOKENS=1600
 ```
 
 这样 AI 与聊天接口会走本地规则和关键词搜索，不依赖外网。
@@ -206,14 +211,17 @@ AI 接口：
 
 AI 能力分两层：
 
-- 基础 AI：分类、自然语言解析、总结、聊天。未配置 `OPENAI_API_KEY` 或 OpenAI 网络不可达时，会使用本地规则兜底。
-- RAG 向量检索：默认关闭。只有 `AI_RAG_ENABLED=true` 且 Qdrant 配置有效时，任务创建/更新/删除才会同步向量，聊天才会优先走向量检索。
+- 基础 AI：分类、自然语言解析、总结、聊天。未配置 `MIMO_API_KEY` 或 Mimo 网络不可达时，会使用本地规则兜底。
+- 任务问答 RAG：会先检索当前用户的任务上下文，再交给 Mimo 生成回答；关键词没命中时，会把最近任务交给 Mimo 判断相关性。
+- Qdrant 向量检索：可选增强。只有 `AI_RAG_ENABLED=true` 且 Qdrant 与 embedding 配置有效时，任务创建/更新/删除才会同步向量，聊天才会优先走向量检索。
 
 推荐交付演示配置：
 
 ```env
 AI_RAG_ENABLED=false
-OPENAI_API_KEY=
+MIMO_API_KEY=
+AI_TIMEOUT_MS=30000
+AI_MAX_TOKENS=1600
 ```
 
 需要验证 RAG 时再配置：
@@ -232,7 +240,7 @@ QDRANT_API_KEY=your_qdrant_key
 - 任务接口均校验当前用户归属，避免越权访问。
 - 生产环境必须设置强 `JWT_SECRET`。
 - 生产环境建议将 `CORS_ORIGIN` 设置为明确前端域名。
-- `.env`、真实数据库凭据、OpenAI Key、Qdrant Key 不应提交。
+- `.env`、真实数据库凭据、Mimo/OpenAI Key、Qdrant Key 不应提交。
 
 ## 测试
 

@@ -32,15 +32,18 @@ DB_USER=root
 DB_PASS=your_password
 DB_DIALECT=mysql
 
-OPENAI_API_KEY=
+MIMO_API_KEY=
+MIMO_BASE_URL=https://api.xiaomimimo.com/v1
+AI_MODEL=mimo-v2.5-pro
 AI_RAG_ENABLED=false
-OPENAI_TIMEOUT_MS=10000
+AI_TIMEOUT_MS=30000
+AI_MAX_TOKENS=1600
 ```
 
 说明：
 
 - `DB_NAME` 和 `DB_USER` 必填。
-- `OPENAI_API_KEY` 为空时，AI 接口使用本地兜底逻辑。
+- `MIMO_API_KEY` 为空时，AI 接口使用本地兜底逻辑。
 - `AI_RAG_ENABLED=false` 时，不会请求 OpenAI embedding 或 Qdrant，聊天走关键词搜索。
 
 ### 1.3 创建数据库
@@ -326,7 +329,7 @@ QDRANT_DISTANCE=Cosine
 3. 调用 `POST /api/ai/chat` 提问。
 4. 响应中的 `sources` 若包含 `score`，说明命中了向量检索结果。
 
-如果网络无法访问 OpenAI 或 Qdrant，后端会回退到关键词搜索；本地验收建议保持 `AI_RAG_ENABLED=false`。
+如果网络无法访问 Mimo 或 Qdrant，后端会回退到关键词搜索；本地验收建议保持 `AI_RAG_ENABLED=false`。
 
 ## 9. 权限与异常用例
 
@@ -399,4 +402,4 @@ curl -X POST http://localhost:3000/api/auth/logout \
 - 服务可通过 `npm start` 启动。
 - 注册、登录、任务 CRUD、用户统计可通过 curl 验证。
 - 前端真实 API 模式可正常登录并完成任务主流程。
-- 本地演示环境未配置 OpenAI 时，AI 接口仍有可用兜底响应。
+- 本地演示环境未配置 Mimo 时，AI 接口仍有可用兜底响应。

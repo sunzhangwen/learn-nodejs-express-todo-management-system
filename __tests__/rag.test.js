@@ -122,4 +122,82 @@ describe('RAG task helpers', () => {
       ]
     })
   })
+
+  test('answers task questions with Mimo using retrieved task context', async () => {
+    process.env = {
+      ...originalEnv,
+      AI_RAG_ENABLED: 'false',
+      MIMO_API_KEY: 'test-mimo-key'
+    }
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: 'You have a quarterly review in Room A at 10:00.'
+            }
+          }
+        ]
+      })
+    })
+
+    const result = await ai.answerFromTasksWithRag('Where is my quarterly review?', [task], task.userId)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.xiaomimimo.com/v1/chat/completions',
+      expect.objectContaining({
+        body: expect.stringContaining('Prepare quarterly review')
+      })
+    )
+    expect(result).toEqual({
+      answer: 'You have a quarterly review in Room A at 10:00.',
+      sources: [
+        {
+          id: 'id_task00001',
+          title: 'Prepare quarterly review',
+          date: '2026-07-08',
+          status: 'pending'
+        }
+      ]
+    })
+  })
+
+  test('uses Mimo with recent task context when keyword search misses', async () => {
+    process.env = {
+      ...originalEnv,
+      AI_RAG_ENABLED: 'false',
+      MIMO_API_KEY: 'test-mimo-key'
+    }
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: '季度复盘在 Room A。'
+            }
+          }
+        ]
+      })
+    })
+
+    const result = await ai.answerFromTasksWithRag('我的季度复盘在哪里开？', [task], task.userId)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://api.xiaomimimo.com/v1/chat/completions',
+      expect.objectContaining({
+        body: expect.stringContaining('Prepare quarterly review')
+      })
+    )
+    expect(result.answer).toBe('季度复盘在 Room A。')
+    expect(result.sources).toEqual([
+      {
+        id: 'id_task00001',
+        title: 'Prepare quarterly review',
+        date: '2026-07-08',
+        status: 'pending'
+      }
+    ])
+  })
 })

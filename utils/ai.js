@@ -1,4 +1,5 @@
-const DEFAULT_MODEL = process.env.AI_MODEL || 'gpt-4o-mini'
+const DEFAULT_MODEL = process.env.AI_MODEL || 'mimo-v2.5-pro'
+const DEFAULT_AI_BASE_URL = 'https://api.xiaomimimo.com/v1'
 const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small'
 const { deleteVector, isConfigured: isVectorDBConfigured, searchVectors, storeVector } = require('./vectorDB')
 
@@ -9,13 +10,26 @@ function isRagEnabled() {
   return String(process.env.AI_RAG_ENABLED || '').trim().toLowerCase() === 'true'
 }
 
-function getOpenAITimeoutMs() {
-  const value = Number(process.env.OPENAI_TIMEOUT_MS)
-  return Number.isFinite(value) && value > 0 ? value : 10000
+function getAITimeoutMs() {
+  const value = Number(process.env.MIMO_TIMEOUT_MS || process.env.AI_TIMEOUT_MS || process.env.OPENAI_TIMEOUT_MS)
+  return Number.isFinite(value) && value > 0 ? value : 30000
+}
+
+function getAIMaxTokens() {
+  const value = Number(process.env.MIMO_MAX_TOKENS || process.env.AI_MAX_TOKENS)
+  return Number.isFinite(value) && value > 0 ? value : 1600
+}
+
+function getAIBaseUrl() {
+  return (process.env.MIMO_BASE_URL || process.env.AI_BASE_URL || DEFAULT_AI_BASE_URL).replace(/\/+$/, '')
+}
+
+function getAIKey() {
+  return process.env.MIMO_API_KEY
 }
 
 async function fetchOpenAI(path, body) {
-  const timeoutMs = getOpenAITimeoutMs()
+  const timeoutMs = getAITimeoutMs()
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
 
@@ -32,6 +46,31 @@ async function fetchOpenAI(path, body) {
   } catch (err) {
     if (err.name === 'AbortError') {
       throw new Error(`OpenAI request timed out after ${timeoutMs}ms`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function fetchAI(path, body) {
+  const timeoutMs = getAITimeoutMs()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(`${getAIBaseUrl()}/${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${getAIKey()}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`AI request timed out after ${timeoutMs}ms`)
     }
     throw err
   } finally {
@@ -73,6 +112,32 @@ function extractTime(text) {
   return `${String(hour).padStart(2, '0')}:${minute}`
 }
 
+function hasChinese(text) {
+  return /[\u4e00-\u9fa5]/.test(String(text || ''))
+}
+
+function stripChineseTaskNoise(text) {
+  return String(text || '')
+    .replace(/创建任务|新增任务|添加任务|新建任务|创建|新增|添加|新建|安排|提醒我|帮我/g, '')
+    .replace(/今天|明天|后天|今晚|晚上|上午|下午|中午|凌晨|早上/g, '')
+    .replace(/\d{1,2}[:：]\d{2}\s*[~\-到至]\s*\d{1,2}[:：]\d{2}/g, '')
+    .replace(/\d{1,2}\s*点(?:\d{1,2}\s*分)?(?:\s*[~\-到至]\s*\d{1,2}\s*点(?:\d{1,2}\s*分)?)?/g, '')
+    .replace(/[，。！？、；：,.!?;:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^我(要去|要|需要|想|去)?/, '')
+    .replace(/^去/, '')
+    .trim()
+}
+
+function inferTitle(text) {
+  if (!hasChinese(text)) {
+    return text.replace(/\b(tomorrow|today|at|remind me to|add|create|new|task|todo)\b/gi, '').trim() || text
+  }
+
+  return stripChineseTaskNoise(text) || text
+}
+
 function todayString(offsetDays = 0) {
   const date = new Date()
   date.setDate(date.getDate() + offsetDays)
@@ -88,27 +153,53 @@ function stripJsonFence(text) {
 }
 
 async function callOpenAIJson(prompt) {
-  if (!process.env.OPENAI_API_KEY || typeof fetch !== 'function') {
+  if (!getAIKey() || typeof fetch !== 'function') {
     return null
   }
 
-  const response = await fetchOpenAI('chat/completions', {
+  const response = await fetchAI('chat/completions', {
     model: DEFAULT_MODEL,
     messages: [
       { role: 'system', content: 'Return compact JSON only. Do not include markdown.' },
       { role: 'user', content: prompt }
     ],
     temperature: 0.2,
-    max_tokens: 600
+    max_tokens: getAIMaxTokens()
   })
 
   if (!response.ok) {
-    throw new Error(`OpenAI request failed: ${response.status}`)
+    throw new Error(`AI request failed: ${response.status}`)
   }
 
   const payload = await response.json()
   const content = payload.choices?.[0]?.message?.content || '{}'
   return JSON.parse(stripJsonFence(content))
+}
+
+async function callAIText(prompt) {
+  if (!getAIKey() || typeof fetch !== 'function') {
+    return null
+  }
+
+  const response = await fetchAI('chat/completions', {
+    model: DEFAULT_MODEL,
+    messages: [
+      {
+        role: 'system',
+        content: 'Answer from the provided task context. Be concise. If the context is insufficient, say so. This chat endpoint is read-only: never claim that you created, updated, or deleted a task.'
+      },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.2,
+    max_tokens: getAIMaxTokens()
+  })
+
+  if (!response.ok) {
+    throw new Error(`AI request failed: ${response.status}`)
+  }
+
+  const payload = await response.json()
+  return payload.choices?.[0]?.message?.content?.trim() || null
 }
 
 async function createEmbedding(text) {
@@ -164,9 +255,13 @@ function normalizeClassification(value, fallback) {
 }
 
 async function parseTask(text) {
-  const classification = await classifyTask({ title: text })
+  const classification = {
+    category: pickCategory(text),
+    priority: pickPriority(text),
+    isFeatured: pickPriority(text) === 'high'
+  }
   const fallback = {
-    title: text.replace(/\b(tomorrow|today|at|remind me to)\b/gi, '').trim() || text,
+    title: inferTitle(text),
     category: classification.category,
     priority: classification.priority,
     startTime: extractTime(text),
@@ -181,10 +276,12 @@ async function parseTask(text) {
   let result = null
   try {
     result = await callOpenAIJson(`Parse a natural language todo into JSON.
+Today is ${todayString(0)}.
 Allowed category values: ${CATEGORIES.join(', ')}.
 Allowed priority values: ${PRIORITIES.join(', ')}.
 Return title, category, priority, startTime, endTime, location, note, date, status, isFeatured.
-Use YYYY-MM-DD for date and HH:mm for times.
+Use YYYY-MM-DD for date and HH:mm for times. Convert relative dates like today and tomorrow using Today.
+Keep user-facing fields (title, location, note) in the same language as the user's text. If the user writes Chinese, title, location, and note must be Chinese and must not be translated into English.
 Text: ${text}`)
   } catch (err) {
     console.warn('AI parse unavailable, using local fallback', err.message)
@@ -192,13 +289,19 @@ Text: ${text}`)
 
   if (!result) return fallback
 
-  return {
+  const merged = {
     ...fallback,
     ...result,
     category: CATEGORIES.includes(result.category) ? result.category : fallback.category,
     priority: PRIORITIES.includes(result.priority) ? result.priority : fallback.priority,
     status: result.status === 'completed' ? 'completed' : 'pending'
   }
+
+  if (hasChinese(text) && !hasChinese(merged.title)) {
+    merged.title = fallback.title
+  }
+
+  return merged
 }
 
 function summarizeTasks(tasks) {
@@ -283,6 +386,57 @@ function answerFromVectorHits(hits) {
   }
 }
 
+function sourcesFromTasks(tasks) {
+  return tasks.map((task) => ({
+    id: task.id,
+    title: task.title,
+    date: task.date,
+    status: task.status
+  }))
+}
+
+function tasksFromVectorHits(hits) {
+  return hits
+    .map((hit) => hit.payload && { ...hit.payload, score: hit.score })
+    .filter(Boolean)
+}
+
+async function answerWithAIFromTasks(question, tasks) {
+  if (!tasks.length) {
+    return {
+      answer: '没有在你的当前任务中找到相关内容。如果你想创建新任务，请输入“提醒我”“创建”“新增”这类指令。',
+      sources: []
+    }
+  }
+
+  const fallback = {
+    answer: summarizeTasks(tasks),
+    sources: sourcesFromTasks(tasks)
+  }
+
+  if (!getAIKey()) return fallback
+
+  try {
+    const context = tasks.map((task, index) => `${index + 1}. ${taskToEmbeddingText(task)}`).join('\n\n')
+    const answer = await callAIText(`Question: ${question}
+
+Task context:
+${context}
+
+Return a helpful answer in Chinese when the question is Chinese, otherwise answer in the user's language. Mention task titles, dates, times, and locations when relevant.`)
+
+    if (!answer) return fallback
+
+    return {
+      answer,
+      sources: fallback.sources
+    }
+  } catch (err) {
+    console.warn('AI chat unavailable, using RAG fallback', err.message)
+    return fallback
+  }
+}
+
 async function syncTaskVector(task) {
   if (!isRagEnabled()) return null
   if (!isVectorDBConfigured()) return null
@@ -361,22 +515,25 @@ function answerFromTasks(question, tasks) {
 
 async function answerFromTasksWithRag(question, tasks, userId) {
   if (!isRagEnabled()) {
-    return answerFromTasks(question, tasks)
+    const matches = searchTasks(tasks, question)
+    return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, 10) : matches))
   }
 
   if (!isVectorDBConfigured()) {
-    return answerFromTasks(question, tasks)
+    const matches = searchTasks(tasks, question)
+    return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, 10) : matches))
   }
 
   try {
     const vector = await createEmbedding(question)
     const hits = await searchVectors({ vector, userId, limit: 5 })
-    if (hits.length) return answerFromVectorHits(hits)
+    if (hits.length) return answerWithAIFromTasks(question, tasksFromVectorHits(hits))
   } catch (err) {
     console.warn('RAG vector search failed, falling back to keyword search', err)
   }
 
-  return answerFromTasks(question, tasks)
+  const matches = searchTasks(tasks, question)
+  return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, 10) : matches))
 }
 
 module.exports = {
