@@ -86,6 +86,8 @@ cp .env.example .env
 | `AI_MODEL` | 否 | `mimo-v2.5-pro` | Chat Completions 模型 |
 | `AI_TIMEOUT_MS` | 否 | `30000` | AI 请求超时时间；`OPENAI_TIMEOUT_MS` 仍兼容 |
 | `AI_MAX_TOKENS` | 否 | `1600` | Mimo 推理与回答的最大 token 数 |
+| `AI_CHAT_MAX_TOKENS` | 否 | `700` | AI 问答的最大 token 数，降低可加快回复 |
+| `AI_CHAT_CONTEXT_LIMIT` | 否 | `5` | 关键词未命中时交给 Mimo 判断的最近任务数量 |
 | `OPENAI_API_KEY` | 否 | 空 | OpenAI API Key；仅 RAG embedding 开启时使用 |
 | `EMBEDDING_MODEL` | 否 | `text-embedding-3-small` | embedding 模型 |
 | `AI_RAG_ENABLED` | 否 | 关闭 | 只有设为 `true` 才启用 RAG 向量检索 |
@@ -101,6 +103,8 @@ AI_RAG_ENABLED=false
 MIMO_API_KEY=
 AI_TIMEOUT_MS=30000
 AI_MAX_TOKENS=1600
+AI_CHAT_MAX_TOKENS=700
+AI_CHAT_CONTEXT_LIMIT=5
 ```
 
 这样 AI 与聊天接口会走本地规则和关键词搜索，不依赖外网。
@@ -222,6 +226,8 @@ AI_RAG_ENABLED=false
 MIMO_API_KEY=
 AI_TIMEOUT_MS=30000
 AI_MAX_TOKENS=1600
+AI_CHAT_MAX_TOKENS=700
+AI_CHAT_CONTEXT_LIMIT=5
 ```
 
 需要验证 RAG 时再配置：

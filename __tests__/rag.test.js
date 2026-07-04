@@ -163,6 +163,34 @@ describe('RAG task helpers', () => {
     })
   })
 
+  test('uses a smaller chat token budget for Mimo answers', async () => {
+    process.env = {
+      ...originalEnv,
+      AI_RAG_ENABLED: 'false',
+      MIMO_API_KEY: 'test-mimo-key'
+    }
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: 'You have a quarterly review in Room A.'
+            }
+          }
+        ]
+      })
+    })
+
+    await ai.answerFromTasksWithRag('Where is my quarterly review?', [task], task.userId)
+
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toEqual(
+      expect.objectContaining({
+        max_tokens: 700
+      })
+    )
+  })
+
   test('uses Mimo with recent task context when keyword search misses', async () => {
     process.env = {
       ...originalEnv,

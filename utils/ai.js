@@ -20,6 +20,16 @@ function getAIMaxTokens() {
   return Number.isFinite(value) && value > 0 ? value : 1600
 }
 
+function getAIChatMaxTokens() {
+  const value = Number(process.env.MIMO_CHAT_MAX_TOKENS || process.env.AI_CHAT_MAX_TOKENS)
+  return Number.isFinite(value) && value > 0 ? value : 700
+}
+
+function getAIChatContextLimit() {
+  const value = Number(process.env.AI_CHAT_CONTEXT_LIMIT)
+  return Number.isFinite(value) && value > 0 ? value : 5
+}
+
 function getAIBaseUrl() {
   return (process.env.MIMO_BASE_URL || process.env.AI_BASE_URL || DEFAULT_AI_BASE_URL).replace(/\/+$/, '')
 }
@@ -118,14 +128,16 @@ function hasChinese(text) {
 
 function stripChineseTaskNoise(text) {
   return String(text || '')
-    .replace(/创建任务|新增任务|添加任务|新建任务|创建|新增|添加|新建|安排|提醒我|帮我/g, '')
-    .replace(/今天|明天|后天|今晚|晚上|上午|下午|中午|凌晨|早上/g, '')
+    .replace(/创建任务|新增任务|添加任务|新建任务|新建行程|创建行程|新增行程|添加行程/g, '')
+    .replace(/创建|新增|添加|新建|安排|提醒我|帮我|行程|日程|任务|待办/g, '')
+    .replace(/今天|明天|后天|今晚|今夜|晚上|上午|下午|中午|凌晨|早上/g, '')
     .replace(/\d{1,2}[:：]\d{2}\s*[~\-到至]\s*\d{1,2}[:：]\d{2}/g, '')
     .replace(/\d{1,2}\s*点(?:\d{1,2}\s*分)?(?:\s*[~\-到至]\s*\d{1,2}\s*点(?:\d{1,2}\s*分)?)?/g, '')
     .replace(/[，。！？、；：,.!?;:]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/^我(要去|要|需要|想|去)?/, '')
+    .replace(/^要去/, '')
     .replace(/^去/, '')
     .trim()
 }
@@ -191,7 +203,7 @@ async function callAIText(prompt) {
       { role: 'user', content: prompt }
     ],
     temperature: 0.2,
-    max_tokens: getAIMaxTokens()
+    max_tokens: getAIChatMaxTokens()
   })
 
   if (!response.ok) {
@@ -282,6 +294,7 @@ Allowed priority values: ${PRIORITIES.join(', ')}.
 Return title, category, priority, startTime, endTime, location, note, date, status, isFeatured.
 Use YYYY-MM-DD for date and HH:mm for times. Convert relative dates like today and tomorrow using Today.
 Keep user-facing fields (title, location, note) in the same language as the user's text. If the user writes Chinese, title, location, and note must be Chinese and must not be translated into English.
+The title must be only the concrete task action/object. Do not include command or schedule framing words such as 创建, 新建, 新增, 添加, 任务, 待办, 行程, 日程, 我要, 我要去, 帮我, 提醒我, 今天, 明天, 今晚, or time expressions.
 Text: ${text}`)
   } catch (err) {
     console.warn('AI parse unavailable, using local fallback', err.message)
@@ -299,6 +312,10 @@ Text: ${text}`)
 
   if (hasChinese(text) && !hasChinese(merged.title)) {
     merged.title = fallback.title
+  }
+
+  if (hasChinese(text) && hasChinese(merged.title)) {
+    merged.title = stripChineseTaskNoise(merged.title) || fallback.title
   }
 
   return merged
@@ -417,7 +434,8 @@ async function answerWithAIFromTasks(question, tasks) {
   if (!getAIKey()) return fallback
 
   try {
-    const context = tasks.map((task, index) => `${index + 1}. ${taskToEmbeddingText(task)}`).join('\n\n')
+    const contextTasks = tasks.slice(0, getAIChatContextLimit())
+    const context = contextTasks.map((task, index) => `${index + 1}. ${taskToEmbeddingText(task)}`).join('\n\n')
     const answer = await callAIText(`Question: ${question}
 
 Task context:
@@ -516,12 +534,12 @@ function answerFromTasks(question, tasks) {
 async function answerFromTasksWithRag(question, tasks, userId) {
   if (!isRagEnabled()) {
     const matches = searchTasks(tasks, question)
-    return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, 10) : matches))
+    return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, getAIChatContextLimit()) : matches))
   }
 
   if (!isVectorDBConfigured()) {
     const matches = searchTasks(tasks, question)
-    return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, 10) : matches))
+    return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, getAIChatContextLimit()) : matches))
   }
 
   try {
@@ -533,7 +551,7 @@ async function answerFromTasksWithRag(question, tasks, userId) {
   }
 
   const matches = searchTasks(tasks, question)
-  return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, 10) : matches))
+  return answerWithAIFromTasks(question, matches.length ? matches : (getAIKey() ? tasks.slice(0, getAIChatContextLimit()) : matches))
 }
 
 module.exports = {

@@ -127,4 +127,41 @@ describe('AI provider configuration', () => {
 
     expect(result.title).toBe('完成作业')
   })
+
+  test('removes schedule and intent words from Chinese task titles', async () => {
+    process.env = {
+      ...originalEnv,
+      MIMO_API_KEY: 'test-mimo-key',
+      OPENAI_API_KEY: ''
+    }
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                title: '行程 我要去做项目汇报材料',
+                category: 'work',
+                priority: 'medium',
+                startTime: '20:00',
+                endTime: '',
+                location: '',
+                note: '',
+                date: '2026-07-04',
+                status: 'pending',
+                isFeatured: false
+              })
+            }
+          }
+        ]
+      })
+    })
+
+    const ai = require('../utils/ai')
+
+    const result = await ai.parseTask('新建行程，今晚8点我要去做项目汇报材料')
+
+    expect(result.title).toBe('做项目汇报材料')
+  })
 })
