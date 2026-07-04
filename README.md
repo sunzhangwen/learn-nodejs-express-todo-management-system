@@ -92,6 +92,12 @@ cp .env.example .env
 | PORT | 否 | 服务端口，默认 3000 |
 | CORS_ORIGIN | 否 | 允许的跨域源，逗号分隔，默认 `*` |
 | NODE_ENV | 否 | 运行环境，默认 `development` |
+| OPENAI_API_KEY | 否 | 启用 AI 分类、解析和 RAG embedding 时使用 |
+| AI_RAG_ENABLED | 否 | 设为 `true` 才启用 RAG 向量检索；默认关闭并使用关键词搜索 |
+| OPENAI_TIMEOUT_MS | 否 | OpenAI 请求超时时间，默认 `10000` 毫秒 |
+| QDRANT_URL | 否 | Qdrant 地址；配置后可用于 RAG 向量检索 |
+| QDRANT_API_KEY | 否 | Qdrant API Key |
+| QDRANT_COLLECTION | 否 | Qdrant collection 名称，默认 `tasks` |
 
 ### 4.3 准备数据库
 

@@ -1,7 +1,43 @@
 const DEFAULT_MODEL = process.env.AI_MODEL || 'gpt-4o-mini'
+const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || 'text-embedding-3-small'
+const { deleteVector, isConfigured: isVectorDBConfigured, searchVectors, storeVector } = require('./vectorDB')
 
 const CATEGORIES = ['work', 'personal', 'activity']
 const PRIORITIES = ['low', 'medium', 'high']
+
+function isRagEnabled() {
+  return String(process.env.AI_RAG_ENABLED || '').trim().toLowerCase() === 'true'
+}
+
+function getOpenAITimeoutMs() {
+  const value = Number(process.env.OPENAI_TIMEOUT_MS)
+  return Number.isFinite(value) && value > 0 ? value : 10000
+}
+
+async function fetchOpenAI(path, body) {
+  const timeoutMs = getOpenAITimeoutMs()
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    return await fetch(`https://api.openai.com/v1/${path}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error(`OpenAI request timed out after ${timeoutMs}ms`)
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 function pickCategory(text) {
   const value = text.toLowerCase()
@@ -56,21 +92,14 @@ async function callOpenAIJson(prompt) {
     return null
   }
 
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: DEFAULT_MODEL,
-      messages: [
-        { role: 'system', content: 'Return compact JSON only. Do not include markdown.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.2,
-      max_tokens: 600
-    })
+  const response = await fetchOpenAI('chat/completions', {
+    model: DEFAULT_MODEL,
+    messages: [
+      { role: 'system', content: 'Return compact JSON only. Do not include markdown.' },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.2,
+    max_tokens: 600
   })
 
   if (!response.ok) {
@@ -82,6 +111,24 @@ async function callOpenAIJson(prompt) {
   return JSON.parse(stripJsonFence(content))
 }
 
+async function createEmbedding(text) {
+  if (!process.env.OPENAI_API_KEY || typeof fetch !== 'function') {
+    return null
+  }
+
+  const response = await fetchOpenAI('embeddings', {
+    model: EMBEDDING_MODEL,
+    input: text
+  })
+
+  if (!response.ok) {
+    throw new Error(`OpenAI embedding request failed: ${response.status}`)
+  }
+
+  const payload = await response.json()
+  return payload.data?.[0]?.embedding || null
+}
+
 async function classifyTask({ title = '', note = '' }) {
   const text = `${title} ${note}`.trim()
   const fallback = {
@@ -91,11 +138,16 @@ async function classifyTask({ title = '', note = '' }) {
     reason: 'Suggested from task keywords and deadline hints.'
   }
 
-  const result = await callOpenAIJson(`Classify this todo task.
+  let result = null
+  try {
+    result = await callOpenAIJson(`Classify this todo task.
 Allowed category values: ${CATEGORIES.join(', ')}.
 Allowed priority values: ${PRIORITIES.join(', ')}.
 Return JSON with category, priority, isFeatured, reason.
 Task: ${text}`)
+  } catch (err) {
+    console.warn('AI classify unavailable, using local fallback', err.message)
+  }
 
   return normalizeClassification(result || fallback, fallback)
 }
@@ -126,12 +178,17 @@ async function parseTask(text) {
     isFeatured: classification.isFeatured
   }
 
-  const result = await callOpenAIJson(`Parse a natural language todo into JSON.
+  let result = null
+  try {
+    result = await callOpenAIJson(`Parse a natural language todo into JSON.
 Allowed category values: ${CATEGORIES.join(', ')}.
 Allowed priority values: ${PRIORITIES.join(', ')}.
 Return title, category, priority, startTime, endTime, location, note, date, status, isFeatured.
 Use YYYY-MM-DD for date and HH:mm for times.
 Text: ${text}`)
+  } catch (err) {
+    console.warn('AI parse unavailable, using local fallback', err.message)
+  }
 
   if (!result) return fallback
 
@@ -153,6 +210,97 @@ function summarizeTasks(tasks) {
     return parts.filter(Boolean).join(' | ')
   })
   return `Summary: ${lines.join('; ')}`
+}
+
+function plainTask(task) {
+  return typeof task?.get === 'function' ? task.get({ plain: true }) : task
+}
+
+function taskToEmbeddingText(task) {
+  const value = plainTask(task)
+  const time = [value.startTime, value.endTime].filter(Boolean).join('-')
+  const fields = [
+    ['Title', value.title],
+    ['Category', value.category],
+    ['Priority', value.priority],
+    ['Date', value.date],
+    ['Time', time],
+    ['Location', value.location],
+    ['Address', value.address],
+    ['Status', value.status],
+    ['Featured', value.isFeatured ? 'yes' : 'no'],
+    ['Note', value.note]
+  ]
+
+  return fields
+    .filter(([, fieldValue]) => fieldValue !== undefined && fieldValue !== null && fieldValue !== '')
+    .map(([label, fieldValue]) => `${label}: ${fieldValue}`)
+    .join('\n')
+}
+
+function taskToVectorPayload(task) {
+  const value = plainTask(task)
+  return {
+    id: value.id,
+    userId: value.userId,
+    title: value.title,
+    category: value.category,
+    priority: value.priority,
+    location: value.location || null,
+    address: value.address || null,
+    note: value.note || null,
+    date: value.date,
+    startTime: value.startTime,
+    endTime: value.endTime || null,
+    status: value.status,
+    isFeatured: Boolean(value.isFeatured)
+  }
+}
+
+function answerFromVectorHits(hits) {
+  const tasks = hits
+    .map((hit) => hit.payload)
+    .filter(Boolean)
+
+  if (!tasks.length) {
+    return {
+      answer: 'No matching tasks found.',
+      sources: []
+    }
+  }
+
+  return {
+    answer: summarizeTasks(tasks),
+    sources: hits
+      .filter((hit) => hit.payload)
+      .map((hit) => ({
+        id: hit.payload.id,
+        title: hit.payload.title,
+        date: hit.payload.date,
+        status: hit.payload.status,
+        score: hit.score
+      }))
+  }
+}
+
+async function syncTaskVector(task) {
+  if (!isRagEnabled()) return null
+  if (!isVectorDBConfigured()) return null
+
+  const vector = await createEmbedding(taskToEmbeddingText(task))
+  if (!Array.isArray(vector)) return null
+
+  return storeVector({
+    id: plainTask(task).id,
+    vector,
+    payload: taskToVectorPayload(task)
+  })
+}
+
+async function removeTaskVector(taskId) {
+  if (!isRagEnabled()) return null
+  if (!isVectorDBConfigured()) return null
+  return deleteVector(taskId)
 }
 
 function taskToSearchText(task) {
@@ -211,10 +359,38 @@ function answerFromTasks(question, tasks) {
   }
 }
 
+async function answerFromTasksWithRag(question, tasks, userId) {
+  if (!isRagEnabled()) {
+    return answerFromTasks(question, tasks)
+  }
+
+  if (!isVectorDBConfigured()) {
+    return answerFromTasks(question, tasks)
+  }
+
+  try {
+    const vector = await createEmbedding(question)
+    const hits = await searchVectors({ vector, userId, limit: 5 })
+    if (hits.length) return answerFromVectorHits(hits)
+  } catch (err) {
+    console.warn('RAG vector search failed, falling back to keyword search', err)
+  }
+
+  return answerFromTasks(question, tasks)
+}
+
 module.exports = {
+  answerFromTasksWithRag,
+  answerFromVectorHits,
   classifyTask,
+  createEmbedding,
+  isRagEnabled,
   parseTask,
+  removeTaskVector,
   summarizeTasks,
+  syncTaskVector,
   answerFromTasks,
+  taskToEmbeddingText,
+  taskToVectorPayload,
   searchTasks
 }

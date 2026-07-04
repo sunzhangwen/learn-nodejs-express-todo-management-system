@@ -3,6 +3,7 @@ const { Task } = require('../models')
 const { authMiddleware } = require('../middleware/auth')
 const { success, error } = require('../utils/response')
 const { generateUniqueId } = require('../utils/idGenerator')
+const { removeTaskVector, syncTaskVector } = require('../utils/ai')
 
 const router = express.Router()
 
@@ -97,6 +98,10 @@ router.post('/', authMiddleware, async (req, res) => {
       userId: req.user.id
     })
 
+    syncTaskVector(task).catch((err) => {
+      console.warn('Failed to sync task vector after create', err)
+    })
+
     return success(res, task, 'Created', 201)
   } catch (err) {
     console.error('Failed to create task', err)
@@ -113,6 +118,9 @@ router.put('/:id', authMiddleware, async (req, res) => {
     if (!task) return error(res, 'Task not found', task === false ? 403 : 404)
 
     await task.update(toTaskFields(req.body))
+    syncTaskVector(task).catch((err) => {
+      console.warn('Failed to sync task vector after update', err)
+    })
     return success(res, task, 'Updated')
   } catch (err) {
     console.error('Failed to update task', err)
@@ -131,6 +139,9 @@ router.patch('/:id/status', authMiddleware, async (req, res) => {
     if (!task) return error(res, 'Task not found', task === false ? 403 : 404)
 
     await task.update({ status })
+    syncTaskVector(task).catch((err) => {
+      console.warn('Failed to sync task vector after status update', err)
+    })
     return success(res, task, 'Updated')
   } catch (err) {
     console.error('Failed to update task status', err)
@@ -144,6 +155,9 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     if (!task) return error(res, 'Task not found', task === false ? 403 : 404)
 
     await task.destroy()
+    removeTaskVector(req.params.id).catch((err) => {
+      console.warn('Failed to delete task vector', err)
+    })
     return success(res, { id: req.params.id }, 'Deleted')
   } catch (err) {
     console.error('Failed to delete task', err)

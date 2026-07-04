@@ -26,6 +26,3 @@ start.cmd
 
 # Claude Code local settings
 .claude/
-
-# Tests
-__tests__/

@@ -3,7 +3,7 @@ const { Task } = require('../models')
 const { authMiddleware } = require('../middleware/auth')
 const { success, error } = require('../utils/response')
 const {
-  answerFromTasks,
+  answerFromTasksWithRag,
   classifyTask,
   parseTask,
   summarizeTasks
@@ -76,7 +76,7 @@ router.post('/chat', authMiddleware, async (req, res) => {
       where: { userId: req.user.id },
       order: [['date', 'ASC'], ['startTime', 'ASC']]
     })
-    const result = answerFromTasks(question.trim(), tasks)
+    const result = await answerFromTasksWithRag(question.trim(), tasks, req.user.id)
     return success(res, result, 'AI chat completed')
   } catch (err) {
     console.error('AI chat failed', err)
